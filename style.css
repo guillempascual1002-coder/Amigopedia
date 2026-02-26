@@ -1,0 +1,442 @@
+/* reset and base styles */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: #fff;
+    color: #222;
+    line-height: 1.5;
+    padding: 20px;
+}
+
+main {
+    max-width: 650px; /* centered column */
+    margin: 0 auto;
+    padding-top: 40px;
+}
+
+/* accordion group - minimal list style */
+.group {
+    /* vertical spacing between items */
+    margin: 8px 0;
+}
+
+.group-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    cursor: pointer;
+    user-select: none;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace, system-ui, sans-serif;
+    font-size: 1rem;
+    position: relative;
+    /* idle drift animation */
+    animation: drift 8s ease-in-out infinite;
+}
+
+/* triangle indicator */
+.group-header::before {
+    content: "▶";
+    display: inline-block;
+    margin-right: 8px;
+    transform-origin: center;
+    transition: transform 0.2s ease;
+}
+
+.group.open .group-header::before {
+    transform: rotate(90deg);
+}
+
+/* hover: pause animation and subtle opacity change */
+.group-header:hover {
+    animation-play-state: paused;
+    opacity: 0.85;
+    cursor: pointer;
+}
+
+/* remove previous hover background rule */
+
+.counter {
+    font-weight: 400;
+    color: #555;
+}
+
+.group-panel {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.25s ease;
+}
+
+.group.open .group-panel {
+    max-height: 1000px; /* large enough to show content */
+}
+
+/* card grid and slots (content visible when panel open) */
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    gap: 10px;
+    padding: 12px 0 20px;
+}
+
+.card-slot {
+    background: #f9f9f9;
+    border: 1px solid #e5e5e5;
+    aspect-ratio: 3 / 4;
+    position: relative;
+    overflow: hidden;
+}
+
+.card-slot img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.2s ease;
+    cursor: grab;
+    position: relative;
+}
+
+/* subtle reflective gloss overlay applied to slot when it contains a card */
+.card-slot.has-card::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -100%;
+    width: 100%;
+    height: 200%;
+    background: linear-gradient(
+        120deg,
+        transparent 30%,
+        rgba(255, 255, 255, 0.35) 50%,
+        transparent 70%
+    );
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(-100%);
+}
+
+.card-slot.has-card:hover::after {
+    animation: lightSweep 600ms ease-out forwards;
+}
+
+@keyframes lightSweep {
+    0% {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+    10% {
+        opacity: 0.35;
+    }
+    60% {
+        opacity: 0.18;
+    }
+    100% {
+        transform: translateX(200%);
+        opacity: 0;
+    }
+}
+
+/* Eliminar efecto de escala al hacer hover sobre cartas del álbum */
+/* .card-slot img:hover { transform: scale(1.05); } */
+
+.card-slot img.dragging {
+    cursor: grabbing;
+    z-index: 1000;
+    transition: none;
+    /* no transform - movement is handled inline in JS using translate only */
+}
+
+.card-slot img.returning {
+    transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* idle drifting animation for accordion headers */
+@keyframes drift {
+    0%, 100% { transform: translate(0,0); }
+    25% { transform: translate(2px,-1px); }
+    50% { transform: translate(-1px,1px); }
+    75% { transform: translate(1px,2px); }
+}
+
+/* pack reveal overlay */
+.overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.2);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    z-index: 400;
+}
+
+.overlay.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.pack-cards {
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    position: relative;
+}
+
+.pack-card {
+    width: 100px;
+    height: 130px;
+    object-fit: cover;
+    opacity: 0;
+    transform: scale(0.95);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    cursor: pointer;
+}
+
+.overlay.visible .pack-card {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.pack-card:hover {
+    transform: scale(1.08);
+    z-index: 5;
+}
+
+
+/* modal overlay */
+.modal {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease;
+}
+
+.modal.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.modal-content {
+    position: relative;
+    max-width: 420px;
+    max-height: 75vh;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.25);
+    /* start slightly small and pushed down */
+    transform: scale(0.95) translateY(10px);
+    opacity: 0;
+    transition: transform 250ms ease, opacity 250ms ease;
+}
+
+.modal.visible .modal-content {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+}
+
+.modal-content img {
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    display: block;
+}
+
+#modal-close {
+    position: absolute;
+    top: -10px;
+    right: -10px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 16px;
+    line-height: 22px;
+    text-align: center;
+    cursor: pointer;
+}
+#modal-close:hover {
+    background: #f0f0f0;
+}
+
+/* envelope UI at bottom */
+.envelope-container {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    z-index: 100;
+}
+
+.envelope-note {
+    font-size: 0.75rem;
+    color: #aaa;
+    margin-bottom: 4px;
+}
+
+#envelope {
+    width: 140px;
+    cursor: pointer;
+    display: block;
+    transition: transform 0.4s ease, opacity 0.4s ease;
+}
+
+#envelope.idle {
+    animation: float 3s ease-in-out infinite, shake 2s ease-in-out infinite;
+}
+
+#envelope.hidden-envelope {
+    transform: translateY(150px);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.envelope {
+    transition: transform 0.4s ease, opacity 0.4s ease;
+}
+
+@keyframes float {
+    0%,100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(-6px); }
+}
+
+@keyframes shake {
+    0%,100% { transform: translateX(0); }
+    25%,75% { transform: translateX(-2px); }
+    50% { transform: translateX(2px); }
+}
+
+/* battle arena styling */
+.battle-zone {
+    position: fixed;
+    bottom: 40px;
+    left: 40px;
+    width: 360px;
+    height: 220px;
+    overflow: hidden;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+    z-index: 90; /* beneath envelope (z-index 100) */
+}
+
+.battle-slot {
+    width: 120px;              /* fixed slot width matching album */
+    height: 160px;             /* 3:4 aspect ratio */
+    border: 2px dashed #bbb;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255,255,255,0.8);
+    position: relative;
+    overflow: hidden;
+}
+
+.battle-zone img {
+    width: 120px;    /* same as album slot width */
+    height: auto;
+    position: relative;
+}
+
+.battle-slot img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none; /* never draggable once placed */
+}
+
+.fight-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 2rem;
+    color: #d00;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+    font-weight: bold;
+}
+
+.fight-text.show {
+    opacity: 1;
+}
+
+/* battle animations */
+.battle-attack {
+    transition: transform 0.2s ease;
+}
+
+.battle-shake {
+    animation: battle-shake 0.2s ease;
+}
+
+@keyframes battle-shake {
+    0%,100% { transform: translateX(0); }
+    25%,75% { transform: translateX(-3px); }
+    50% { transform: translateX(3px); }
+}
+
+.battle-jump {
+    animation: battle-jump 0.3s ease 2;
+}
+
+@keyframes battle-jump {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-20px); }
+}
+
+.battle-lose {
+    transition: transform 0.4s ease, opacity 0.4s ease;
+    transform: translateY(20px);
+    opacity: 0;
+}
+
+/* flying cards animation */
+.fly-container {
+    position: fixed;
+    display: flex;
+    gap: 8px;
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, 0) scale(0.9);
+    transition: transform 0.4s ease, opacity 0.4s ease;
+    z-index: 200;
+}
+
+.fly-container.show {
+    transform: translate(-50%, -120px) scale(1);
+    opacity: 1;
+}
+
+.fly-card {
+    width: 60px;
+    height: 80px;
+    object-fit: cover;
+    opacity: 0;
+    transform: scale(0.9);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fly-container.show .fly-card {
+    opacity: 1;
+    transform: scale(1);
+}
