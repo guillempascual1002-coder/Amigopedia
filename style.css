@@ -543,6 +543,82 @@ main {
         pointer-events: none;
     }
 
+    /* holographic overlay (desktop only) */
+    .holo {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .holo-overlay {
+        position: absolute;
+        inset: 0;
+        background-image: url("images/holo-overlay.png");
+        background-size: cover;
+        background-position: center;
+        pointer-events: none;
+        opacity: 0;
+        mix-blend-mode: overlay;
+        transition: opacity 0.2s ease;
+    }
+
+    /* Album hover */
+    .card-slot .holo:hover .holo-overlay {
+        opacity: 0.35;
+    }
+
+    /* Inspection zone: opacity driven via JS hover reveal */
+    .display-zone .holo .holo-overlay {
+        opacity: 0;
+        transition: opacity 0.2s ease;
+    }
+
+    .card-wrapper {
+        width: 100%;
+        height: 100%;
+    }
+
+    .card-wrapper img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    /* Pack stack */
+    .pack-card-wrapper {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 100%;
+        height: auto;
+        transform-origin: center;
+        transition: transform 0.4s ease, opacity 0.4s ease;
+    }
+
+    .pack-card-wrapper .stack-card {
+        position: relative;
+        top: 0;
+        left: 0;
+        transform: none;
+        width: 100%;
+        height: auto;
+        display: block;
+        border-radius: 6px;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+    }
+
+    .pack-card-wrapper .holo-overlay {
+        opacity: 0.2;
+    }
+
+    .pack-card-wrapper:hover .holo-overlay {
+        opacity: 0.45;
+    }
+
+    .pack-card-wrapper.stack-card-revealing {
+        opacity: 0;
+    }
+
     .card-reflection {
         position: absolute;
         inset: 0;
@@ -812,7 +888,7 @@ main {
 
     .envelope {
         position: static;
-        width: 46px;
+        width: 35px;
         margin: 0 auto;
         left: auto;
         right: auto;

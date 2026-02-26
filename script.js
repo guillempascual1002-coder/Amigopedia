@@ -2,6 +2,12 @@
 const DRAG_THRESHOLD = 6;
 // pack cooldown duration (ms)
 const PACK_COOLDOWN = 7 * 1000;
+// filenames that should render with holographic overlay (desktop only)
+const HOLO_CARDS = [
+    "black-angus-03.png",
+    "fuck-quesadilla-05.png",
+    "otros-02.png"
+];
 
 // collection state: track quantities per card number in each group
 const collection = {
@@ -187,11 +193,52 @@ function buildFilename(group, num) {
     return `${group}-${String(num).padStart(2, '0')}.png`;
 }
 
+function isHoloCard(filename) {
+    return HOLO_CARDS.includes(filename);
+}
+
+function createCardElement(filename, wrapperClass, { wrapNonHolo = false, allowHolo = false } = {}) {
+    const img = document.createElement('img');
+    img.src = "images/" + filename;
+    img.alt = filename;
+    img.dataset.filename = filename;
+
+    const isDesktop = window.matchMedia && window.matchMedia('(min-width: 1024px)').matches;
+    const applyHolo = allowHolo && isDesktop && isHoloCard(filename);
+
+    if (applyHolo) {
+        const wrapper = document.createElement('div');
+        wrapper.className = `${wrapperClass || 'card-wrapper'} holo`;
+        wrapper.dataset.filename = filename;
+        wrapper.appendChild(img);
+        const overlay = document.createElement('div');
+        overlay.className = 'holo-overlay';
+        wrapper.appendChild(overlay);
+        return { node: wrapper, img, dragTarget: wrapper };
+    }
+
+    if (wrapNonHolo && wrapperClass) {
+        const wrapper = document.createElement('div');
+        wrapper.className = wrapperClass;
+        wrapper.dataset.filename = filename;
+        wrapper.appendChild(img);
+        return { node: wrapper, img, dragTarget: wrapper };
+    }
+
+    return { node: img, img, dragTarget: img };
+}
+
 function getCardInfoFromImg(img) {
-    const name = img.dataset.filename || img.alt || '';
+    const name = (img.dataset && img.dataset.filename) || img.alt || '';
     let filename = name || '';
     if (!filename && img.src) {
         filename = img.src.split('/').pop().split('\\').pop();
+    }
+    if (!filename && typeof img.querySelector === 'function') {
+        const inner = img.querySelector('img');
+        if (inner) {
+            filename = inner.dataset.filename || inner.alt || filename;
+        }
     }
     const group = parseGroup(filename);
     const num = parseSlotNumber(filename);
@@ -211,14 +258,10 @@ function addCard(filename) {
     const selector = `.card-slot[data-group="${group}"][data-slot="${num}"]`;
     const slot = document.querySelector(selector);
     if (slot && !slot.querySelector('img')) {
-        const img = document.createElement('img');
-        img.src = "images/" + filename;
-        console.log('Loading card from:', img.src);
-        img.alt = filename;
-        img.dataset.filename = filename;
+        const { node, img, dragTarget } = createCardElement(filename, 'card-wrapper', { wrapNonHolo: true, allowHolo: false });
         img.addEventListener('click', () => openModal(img.src, img.alt));
-        enableCardDrag(img);
-        slot.appendChild(img);
+        enableCardDrag(dragTarget);
+        slot.appendChild(node);
         // mark slot as containing a card so UI effects (gloss) only apply when present
         slot.classList.add('has-card');
     }
@@ -231,13 +274,10 @@ function placeCardInSlot(group, num, filename) {
     const selector = `.card-slot[data-group="${group}"][data-slot="${num}"]`;
     const slot = document.querySelector(selector);
     if (!slot || slot.querySelector('img')) return;
-    const img = document.createElement('img');
-    img.src = "images/" + filename;
-    img.alt = filename;
-    img.dataset.filename = filename;
+    const { node, img, dragTarget } = createCardElement(filename, 'card-wrapper', { wrapNonHolo: true, allowHolo: false });
     img.addEventListener('click', () => openModal(img.src, img.alt));
-    enableCardDrag(img);
-    slot.appendChild(img);
+    enableCardDrag(dragTarget);
+    slot.appendChild(node);
     slot.classList.add('has-card');
 }
 
@@ -653,6 +693,13 @@ function tryPlaceInDisplayZone(img, x, y) {
     const reflection = document.createElement('div');
     reflection.className = 'card-reflection';
     wrapper.appendChild(img);
+    const isDesktop = window.matchMedia && window.matchMedia('(min-width: 1024px)').matches;
+    if (isDesktop && isHoloCard(img.dataset.filename)) {
+        const overlay = document.createElement('div');
+        overlay.className = 'holo-overlay';
+        wrapper.classList.add('holo');
+        wrapper.appendChild(overlay);
+    }
     wrapper.appendChild(reflection);
     container.appendChild(wrapper);
 
@@ -861,6 +908,8 @@ function setupDisplayCardEffects(wrapper, reflection) {
     const clamp = (val, min, max) => Math.min(Math.max(val, min), max);
     wrapper.style.transform = baseTransform;
 
+    const holoOverlay = wrapper.querySelector('.holo-overlay');
+
     const handleMove = (e) => {
         const rect = wrapper.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;
@@ -873,11 +922,24 @@ function setupDisplayCardEffects(wrapper, reflection) {
         const percentY = ((e.clientY - rect.top) / rect.height) * 100;
         reflection.style.background = `radial-gradient(circle at ${percentX}% ${percentY}%, rgba(255,255,255,0.45), rgba(255,255,255,0.15) 30%, transparent 60%)`;
         wrapper.classList.add('active');
+
+        if (holoOverlay) {
+            holoOverlay.style.opacity = '0.85';
+            const radius = Math.max(rect.width, rect.height) * 0.25;
+            const gradient = `radial-gradient(circle ${radius}px at ${percentX}% ${percentY}%, rgba(255,255,255,1) 0%, rgba(255,255,255,1) 20%, rgba(255,255,255,0) 90%)`;
+            holoOverlay.style.maskImage = gradient;
+            holoOverlay.style.webkitMaskImage = gradient;
+        }
     };
 
     const handleLeave = () => {
         wrapper.style.transform = baseTransform;
         wrapper.classList.remove('active');
+        if (holoOverlay) {
+            holoOverlay.style.opacity = '0';
+            holoOverlay.style.maskImage = 'none';
+            holoOverlay.style.webkitMaskImage = 'none';
+        }
     };
 
     const handleAnimEnd = () => {
@@ -1058,17 +1120,15 @@ function showPackOverlay(filenames) {
         const depth = filenames.length - 1 - index;
         const offsetY = depth * 4;
         const scale = 1 - depth * 0.02;
-        const img = document.createElement('img');
-        img.className = 'stack-card';
-        img.src = "images/" + name;
+        const { node, img } = createCardElement(name, 'pack-card-wrapper', { wrapNonHolo: true, allowHolo: false });
+        img.classList.add('stack-card');
         console.log('Loading card from:', img.src);
-        img.alt = name;
         img.dataset.cardName = name;
         const baseTransform = `translate(-50%, -50%) translateY(${offsetY}px) scale(${scale})`;
-        img.dataset.baseTransform = baseTransform;
-        img.style.transform = baseTransform;
-        img.style.zIndex = String(200 + index);
-        stack.appendChild(img);
+        node.dataset.baseTransform = baseTransform;
+        node.style.transform = baseTransform;
+        node.style.zIndex = String(200 + index);
+        stack.appendChild(node);
     });
 
     overlay.appendChild(stack);
@@ -1100,7 +1160,9 @@ function showPackOverlay(filenames) {
             topCard.style.transform = `${topCard.dataset.baseTransform} translateX(300px) rotate(8deg)`;
             topCard.style.opacity = '0';
             topCard.addEventListener('transitionend', () => {
-                addCard(topCard.dataset.cardName);
+                const img = topCard.querySelector('img');
+                const cardName = img ? img.dataset.cardName || img.alt : topCard.dataset.cardName;
+                addCard(cardName);
                 if (topCard.parentNode === stack) {
                     stack.removeChild(topCard);
                 }
