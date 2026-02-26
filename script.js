@@ -146,6 +146,7 @@ function init() {
     setupModal();
     setupEnvelope();
     setupDisplayZone();
+    setupInfoOverlay();
     resumePackCooldown();
     updateEnvelopeState();
     updateEnvelopeVisibilityForAlbum();
@@ -889,6 +890,32 @@ function isCooldownActive() {
     return !!stored && stored > Date.now();
 }
 
+function setupInfoOverlay() {
+    const trigger = document.querySelector('.info-trigger');
+    const overlay = document.getElementById('info-overlay');
+    if (!trigger || !overlay) return;
+
+    const open = () => {
+        overlay.classList.add('visible');
+        document.body.style.overflow = 'hidden';
+    };
+
+    const close = () => {
+        overlay.classList.remove('visible');
+        document.body.style.overflow = '';
+    };
+
+    trigger.addEventListener('click', open);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) close();
+    });
+
+    // On mobile, show the info overlay on first load automatically.
+    if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
+        open();
+    }
+}
+
 function showEnvelopeNow() {
     const { env, note, timer } = getCooldownElements();
     if (timer) timer.style.display = 'none';
@@ -1121,7 +1148,7 @@ function showPackOverlay(filenames) {
 
     filenames.forEach((name, index) => {
         const depth = filenames.length - 1 - index;
-        const offsetY = depth * 4;
+        const offsetY = isMobile ? -(depth * 6) : depth * 4;
         const scale = 1 - depth * 0.02;
         const { node, img } = createCardElement(name, 'pack-card-wrapper', { wrapNonHolo: true, allowHolo: false });
         img.classList.add('stack-card');
@@ -1136,6 +1163,11 @@ function showPackOverlay(filenames) {
 
     overlay.appendChild(stack);
     document.body.appendChild(overlay);
+
+    if (isMobile) {
+        stack.style.width = '90vw';
+        stack.style.maxWidth = '340px';
+    }
 
     const closeOverlay = () => {
         overlay.classList.remove('visible');
