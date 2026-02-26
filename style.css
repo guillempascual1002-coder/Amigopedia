@@ -563,9 +563,11 @@ main {
         margin: 0 auto;
         left: auto;
         right: auto;
-        transform: none;
-        /* Reduce idle animation amplitude */
-        animation: float-mobile 2.5s ease-in-out infinite, shake 2s ease-in-out infinite;
+        transform: translateZ(0);
+        backface-visibility: hidden;
+        will-change: transform;
+        /* Reduce idle animation amplitude and prevent shake flicker on mobile */
+        animation: float-mobile 2.5s ease-in-out infinite;
     }
 
     .envelope-container {
