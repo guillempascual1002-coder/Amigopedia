@@ -2,6 +2,11 @@
 const DRAG_THRESHOLD = 6;
 // pack cooldown duration (ms)
 const PACK_COOLDOWN = 7 * 1000;
+// audio assets
+const packOpenSound = new Audio("sounds/pack-open.mp3");
+const cardRevealSound = new Audio("sounds/card-reveal.mp3");
+packOpenSound.volume = 0.6;
+cardRevealSound.volume = 0.5;
 // filenames that should render with holographic overlay (desktop only)
 const HOLO_CARDS = [
     "especiales-01.png",
@@ -44,6 +49,12 @@ function ensureCardRecord(group, num) {
         collection[group][num] = { quantity: 0, wins: 0 };
     }
     return collection[group][num];
+}
+
+function playSound(sound) {
+    if (!sound) return;
+    sound.currentTime = 0;
+    sound.play().catch(() => {});
 }
 
 // helper to count unique collected cards across all groups
@@ -1032,7 +1043,9 @@ function updateEnvelopeState() {
     if (!envelope) return;
 
     if (isCooldownActive()) {
-        envelope.style.display = 'none';
+        envelope.classList.add('disabled');
+        envelope.style.pointerEvents = 'none';
+        envelope.style.display = 'block';
         if (note) note.style.display = 'none';
         if (timer) timer.style.display = 'block';
         return;
@@ -1064,27 +1077,30 @@ function handleEnvelopeClick() {
     // 1. press effect: scale(0.95) for 120ms
     env.style.transform = 'scale(0.95)';
     
-    setTimeout(() => {
-        // change src to envelope-open.gif
+    // swap to open art before movement so the slide uses the open graphic
+    requestAnimationFrame(() => {
         env.src = 'images/envelope-open.gif';
         env.style.transform = '';
-        
-        // after 200ms: trigger card reveal
-        setTimeout(() => {
-            openEnvelope();
-            startCooldown();
-            
-            // after 400ms: animate downward and fade out
+        playSound(packOpenSound);
+
+        // next frame: start the slide with the open image already visible
+        requestAnimationFrame(() => {
             setTimeout(() => {
                 env.classList.add('hidden-envelope');
-                
-                // after animation completes (400ms)
+
+                // trigger card reveal slightly after starting the slide
                 setTimeout(() => {
-                    envelopeState = 'hidden';
-                }, 400);
-            }, 200);
-        }, 200);
-    }, 120);
+                    openEnvelope();
+                    startCooldown();
+
+                    // allow the slower slide animation to finish
+                    setTimeout(() => {
+                        envelopeState = 'hidden';
+                    }, 1200);
+                }, 150);
+            }, 500); // allow open image to paint before sliding
+        });
+    });
 }
 
 function startCooldown(existingTime) {
@@ -1100,7 +1116,9 @@ function startCooldown(existingTime) {
         cooldownInterval = null;
     }
 
-    env.style.display = 'none';
+    env.classList.add('disabled');
+    env.style.pointerEvents = 'none';
+    env.style.display = 'block';
     if (note) note.style.display = 'none';
     timer.style.display = 'block';
 
@@ -1142,9 +1160,12 @@ function showPackOverlay(filenames) {
     overlay.className = 'overlay stack-overlay';
 
     const stack = document.createElement('div');
-    stack.className = 'card-stack';
+    stack.className = 'card-stack stack-enter';
 
     const isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+    if (isMobile) {
+        stack.style.touchAction = 'manipulation'; // reduce touch delays and let taps fire fast
+    }
 
     filenames.forEach((name, index) => {
         const depth = filenames.length - 1 - index;
@@ -1181,11 +1202,22 @@ function showPackOverlay(filenames) {
             return;
         }
 
+        let revealed = false;
+        let stackTap = null;
+        const triggerReveal = (e) => {
+            if (revealed) return;
+            if (e) e.preventDefault();
+            revealed = true;
+            detachHandlers();
+            handleReveal();
+        };
+
         Array.from(stack.children).forEach(card => {
             card.style.pointerEvents = card === topCard ? 'auto' : 'none';
         });
 
         const handleReveal = () => {
+            playSound(cardRevealSound);
             topCard.classList.add('stack-card-revealing');
             topCard.style.transform = `${topCard.dataset.baseTransform} translateX(300px) rotate(8deg)`;
             topCard.style.opacity = '0';
@@ -1204,6 +1236,10 @@ function showPackOverlay(filenames) {
             topCard.removeEventListener('click', clickHandler);
             topCard.removeEventListener('pointerdown', onPointerDown);
             window.removeEventListener('pointerup', onPointerUp);
+            if (stackTap) {
+                stack.removeEventListener('pointerup', stackTap);
+                stack.removeEventListener('click', stackTap);
+            }
             const img = topCard.querySelector('img');
             if (img) {
                 img.removeEventListener('click', clickHandler);
@@ -1213,14 +1249,11 @@ function showPackOverlay(filenames) {
         };
 
         const clickHandler = () => {
-            detachHandlers();
-            handleReveal();
+            triggerReveal();
         };
 
         const tapReveal = (e) => {
-            e.preventDefault();
-            detachHandlers();
-            handleReveal();
+            triggerReveal(e);
         };
 
         let startX = 0;
@@ -1237,8 +1270,7 @@ function showPackOverlay(filenames) {
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
             if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
-                detachHandlers();
-                handleReveal();
+                triggerReveal();
             }
         };
 
@@ -1253,6 +1285,9 @@ function showPackOverlay(filenames) {
         if (isMobile) {
             topCard.addEventListener('pointerdown', onPointerDown);
             topCard.addEventListener('pointerup', tapReveal);
+            stackTap = (e) => triggerReveal(e);
+            stack.addEventListener('pointerup', stackTap, { passive: false });
+            stack.addEventListener('click', stackTap);
         }
     };
 

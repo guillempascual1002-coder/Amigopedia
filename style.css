@@ -352,6 +352,24 @@ main {
     height: calc(min(90vw, 340px) * 1.35);
     margin: 0 auto;
     overflow: visible;
+    opacity: 1;
+}
+
+.card-stack.stack-enter {
+    opacity: 0;
+    animation: stackRise 0.45s ease-out forwards;
+    will-change: transform, opacity;
+}
+
+@keyframes stackRise {
+    from {
+        transform: translateY(60px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
 }
 
 .stack-card {
@@ -465,7 +483,7 @@ main {
     height: auto;
     cursor: pointer;
     display: block;
-    transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.4, 1), opacity 0.5s ease;
+    transition: transform 1.2s cubic-bezier(0.25, 0.8, 0.4, 1), opacity 1.2s ease;
 }
 
 .envelope.disabled {
@@ -479,7 +497,7 @@ main {
 }
 
 #envelope.hidden-envelope {
-    transform: translateY(140vh);
+    transform: translateY(140vh) scale(0.95);
     opacity: 0;
     pointer-events: none;
 }
@@ -1000,7 +1018,7 @@ main {
     #envelope,
     .envelope {
         position: static;
-        width: 140px;
+        width: 180px;
         height: auto;
         margin: 0 auto;
         left: auto;
