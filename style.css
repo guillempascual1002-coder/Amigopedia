@@ -364,7 +364,7 @@ main {
     border-radius: 6px;
     box-shadow: 0 6px 18px rgba(0,0,0,0.25);
     transition: transform 0.4s ease, opacity 0.4s ease;
-    pointer-events: none;
+    pointer-events: auto;
 }
 
 .stack-card.stack-card-revealing {
@@ -702,6 +702,7 @@ main {
         height: auto;
         transform-origin: center;
         transition: transform 0.4s ease, opacity 0.4s ease;
+        pointer-events: auto;
     }
 
     .pack-card-wrapper .stack-card {
@@ -714,6 +715,7 @@ main {
         display: block;
         border-radius: 6px;
         box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+        pointer-events: auto;
     }
 
     .pack-card-wrapper .holo-overlay {
@@ -997,7 +999,7 @@ main {
 
     .envelope {
         position: static;
-        width: 7px;
+        width: 4px;
         margin: 0 auto;
         left: auto;
         right: auto;
