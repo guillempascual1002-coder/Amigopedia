@@ -1204,6 +1204,10 @@ function showPackOverlay(filenames) {
             topCard.removeEventListener('click', clickHandler);
             topCard.removeEventListener('pointerdown', onPointerDown);
             window.removeEventListener('pointerup', onPointerUp);
+            const img = topCard.querySelector('img');
+            if (img) {
+                img.removeEventListener('click', clickHandler);
+            }
         };
 
         const clickHandler = () => {
@@ -1231,6 +1235,10 @@ function showPackOverlay(filenames) {
         };
 
         topCard.addEventListener('click', clickHandler);
+        const topImg = topCard.querySelector('img');
+        if (topImg) {
+            topImg.addEventListener('click', clickHandler);
+        }
         if (isMobile) {
             topCard.addEventListener('pointerdown', onPointerDown);
         }
