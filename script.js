@@ -1160,10 +1160,7 @@ function showPackOverlay(filenames) {
     const stack = document.createElement('div');
     stack.className = 'card-stack stack-enter';
 
-    const isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
-    if (isMobile) {
-        stack.style.touchAction = 'manipulation'; // reduce touch delays and let taps fire fast
-    }
+    stack.style.touchAction = 'manipulation'; // reduce touch delays and let taps fire fast
 
     filenames.forEach((name, index) => {
         const depth = filenames.length - 1 - index;
@@ -1201,7 +1198,6 @@ function showPackOverlay(filenames) {
         }
 
         let revealed = false;
-        let stackTap = null;
         const triggerReveal = (e) => {
             if (revealed) return;
             if (e) e.preventDefault();
@@ -1241,60 +1237,28 @@ function showPackOverlay(filenames) {
 
         const detachHandlers = () => {
             topCard.removeEventListener('click', clickHandler);
-            topCard.removeEventListener('pointerdown', onPointerDown);
-            window.removeEventListener('pointerup', onPointerUp);
-            if (stackTap) {
-                stack.removeEventListener('pointerup', stackTap);
-                stack.removeEventListener('click', stackTap);
-            }
+            topCard.removeEventListener('pointerup', pointerUpHandler);
             const img = topCard.querySelector('img');
             if (img) {
                 img.removeEventListener('click', clickHandler);
-                img.removeEventListener('pointerup', tapReveal);
+                img.removeEventListener('pointerup', pointerUpHandler);
             }
-            topCard.removeEventListener('pointerup', tapReveal);
         };
 
         const clickHandler = () => {
             triggerReveal();
         };
 
-        const tapReveal = (e) => {
+        const pointerUpHandler = (e) => {
             triggerReveal(e);
         };
 
-        let startX = 0;
-        let startY = 0;
-        const SWIPE_THRESHOLD = 50;
-
-        const onPointerDown = (e) => {
-            startX = e.clientX;
-            startY = e.clientY;
-            window.addEventListener('pointerup', onPointerUp, { once: true });
-        };
-
-        const onPointerUp = (e) => {
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
-                triggerReveal();
-            }
-        };
-
         topCard.addEventListener('click', clickHandler);
+        topCard.addEventListener('pointerup', pointerUpHandler);
         const topImg = topCard.querySelector('img');
         if (topImg) {
             topImg.addEventListener('click', clickHandler);
-            if (isMobile) {
-                topImg.addEventListener('pointerup', tapReveal);
-            }
-        }
-        if (isMobile) {
-            topCard.addEventListener('pointerdown', onPointerDown);
-            topCard.addEventListener('pointerup', tapReveal);
-            stackTap = (e) => triggerReveal(e);
-            stack.addEventListener('pointerup', stackTap, { passive: false });
-            stack.addEventListener('click', stackTap);
+            topImg.addEventListener('pointerup', pointerUpHandler);
         }
     };
 
