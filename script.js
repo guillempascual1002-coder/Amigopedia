@@ -1148,7 +1148,7 @@ function showPackOverlay(filenames) {
 
     filenames.forEach((name, index) => {
         const depth = filenames.length - 1 - index;
-        const offsetY = isMobile ? -(depth * 6) : depth * 4;
+        const offsetY = depth * 4;
         const scale = 1 - depth * 0.02;
         const { node, img } = createCardElement(name, 'pack-card-wrapper', { wrapNonHolo: true, allowHolo: false });
         img.classList.add('stack-card');
@@ -1163,11 +1163,6 @@ function showPackOverlay(filenames) {
 
     overlay.appendChild(stack);
     document.body.appendChild(overlay);
-
-    if (isMobile) {
-        stack.style.width = '90vw';
-        stack.style.maxWidth = '340px';
-    }
 
     const closeOverlay = () => {
         overlay.classList.remove('visible');

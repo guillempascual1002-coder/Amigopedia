@@ -349,8 +349,9 @@ main {
 .card-stack {
     position: relative;
     width: min(90vw, 340px);
-    height: auto;
+    height: calc(min(90vw, 340px) * 1.35);
     margin: 0 auto;
+    overflow: visible;
 }
 
 .stack-card {
@@ -996,7 +997,7 @@ main {
 
     .envelope {
         position: static;
-        width: 14px;
+        width: 7px;
         margin: 0 auto;
         left: auto;
         right: auto;
