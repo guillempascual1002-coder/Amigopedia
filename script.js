@@ -921,10 +921,8 @@ function setupInfoOverlay() {
         if (e.target === overlay) close();
     });
 
-    // On mobile, show the info overlay on first load automatically.
-    if (window.matchMedia && window.matchMedia('(max-width: 768px)').matches) {
-        open();
-    }
+    // Auto-open info on first load for all devices; users can still toggle with the info icon
+    open();
 }
 
 function showEnvelopeNow() {
@@ -1221,7 +1219,11 @@ function showPackOverlay(filenames) {
             topCard.classList.add('stack-card-revealing');
             topCard.style.transform = `${topCard.dataset.baseTransform} translateX(300px) rotate(8deg)`;
             topCard.style.opacity = '0';
-            topCard.addEventListener('transitionend', () => {
+
+            let finished = false;
+            const finish = () => {
+                if (finished) return;
+                finished = true;
                 const img = topCard.querySelector('img');
                 const cardName = img ? img.dataset.cardName || img.alt : topCard.dataset.cardName;
                 addCard(cardName);
@@ -1229,7 +1231,12 @@ function showPackOverlay(filenames) {
                     stack.removeChild(topCard);
                 }
                 revealNext();
-            }, { once: true });
+            };
+
+            // Transition end normally advances the stack
+            topCard.addEventListener('transitionend', finish, { once: true });
+            // Fallback in case the transitionend doesn't fire on some mobile browsers
+            setTimeout(finish, 700);
         };
 
         const detachHandlers = () => {

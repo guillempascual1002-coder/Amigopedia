@@ -1018,7 +1018,7 @@ main {
     #envelope,
     .envelope {
         position: static;
-        width: 180px;
+        width: min(90vw, 360px);
         height: auto;
         margin: 0 auto;
         left: auto;
