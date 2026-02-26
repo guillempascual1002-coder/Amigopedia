@@ -205,22 +205,21 @@ function enableCardDrag(img) {
         return false;
     });
 
-    // handle mouse move
-    const handleMouseMove = (e) => {
-        if (!isPressed) return;  // not pressed, ignore
-        
+    // Ensure pointer events work on all devices
+    img.style.touchAction = 'none';
+
+    // handle pointer move
+    const handlePointerMove = (e) => {
+        if (!isPressed) return;
         currentX = e.clientX;
         currentY = e.clientY;
-        
-        // check if threshold exceeded
         if (!isDragging) {
             const dx = currentX - startX;
             const dy = currentY - startY;
             const distance = Math.sqrt(dx * dx + dy * dy);
-            
-            // activate drag when threshold crossed
             if (distance > DRAG_THRESHOLD) {
                 isDragging = true;
+                wasDragging = true;
                 img.classList.add('dragging');
                 img.style.position = 'fixed';
                 img.style.margin = '0';
@@ -229,49 +228,35 @@ function enableCardDrag(img) {
                 img.style.height = rect.height + 'px';
                 img.style.pointerEvents = 'auto';
             } else {
-                return;  // still within threshold, don't move
+                return;
             }
         }
-        
-        // dragging is active, update position and velocity
         velocityX = currentX - lastX;
         velocityY = currentY - lastY;
         lastX = currentX;
         lastY = currentY;
-        
-        // calculate translation from initial position
         translationX = currentX - startX;
         translationY = currentY - startY;
-        
-        // tilt based on horizontal velocity (max ±6 degrees)
         const tilt = Math.max(-6, Math.min(6, velocityX * 0.2));
-        
-        // dynamic shadow that grows with movement
         const shadowIntensity = Math.min(0.3, Math.abs(velocityX) * 0.01 + 0.15);
         const shadowOffset = Math.abs(velocityX) * 0.5;
-        
-        // apply only a translation; remove any scaling or rotation
-        // so the card retains its original size and aspect ratio.
         img.style.transform = `translate(${translationX}px, ${translationY}px)`;
         img.style.boxShadow = `${shadowOffset}px ${20 + shadowOffset}px ${40 + shadowOffset}px rgba(0,0,0,${shadowIntensity})`;
     };
 
-    // handle mouseup (stops drag immediately)
-    const handleEndDrag = () => {
+    // handle pointer up (stops drag immediately)
+    const handleEndDrag = (e) => {
         if (!isPressed) return;
-        
         isPressed = false;
-        window.removeEventListener('mousemove', handleMouseMove);
-        
+        img.releasePointerCapture(e.pointerId);
+        window.removeEventListener('pointermove', handlePointerMove);
         // if threshold was never exceeded, just a click - return without animation
         if (!isDragging) {
             return;
         }
-        
         // check if we landed in the battle zone; if so clone and stop here
         if (tryPlaceInBattleZone(img, currentX, currentY)) {
             wasDragging = true;
-            // clear drag visuals and restore to default for the original card
             isDragging = false;
             img.classList.remove('dragging');
             img.style.position = '';
@@ -281,25 +266,17 @@ function enableCardDrag(img) {
             img.style.pointerEvents = '';
             img.style.transform = '';
             img.style.boxShadow = '';
-            return; // do not perform inertia bounce
+            return;
         }
-        
         isDragging = false;
         img.classList.remove('dragging');
         img.classList.add('returning');
-        
-        // inertia: apply brief momentum in direction of last movement
         const inertiaX = translationX + (velocityX * 8);
         const inertiaY = translationY + (velocityY * 8);
-        
-        // apply inertia kick (translation only)
         img.style.transform = `translate(${inertiaX}px, ${inertiaY}px)`;
         img.style.boxShadow = '0 0 0 rgba(0,0,0,0)';
-        
         setTimeout(() => {
-            // snap back to original position with elastic easing (via CSS transition)
             img.style.transform = 'translate(0, 0)';
-            
             setTimeout(() => {
                 img.classList.remove('returning');
                 img.style.position = '';
@@ -313,29 +290,15 @@ function enableCardDrag(img) {
         }, 50);
     };
 
-    // click suppression to avoid opening modal after drag
-    img.addEventListener('click', (e) => {
-        if (wasDragging) {
-            wasDragging = false;
-            return;
-        }
-        openModal(img.src, img.alt);
-    });
-
-    // mousedown: store position, enable listeners, but don't drag yet
-    img.addEventListener('mousedown', (e) => {
-        if (battleActive) return; // prevent dragging during battle
+    // pointerdown: store position, enable listeners, but don't drag yet
+    img.addEventListener('pointerdown', (e) => {
+        if (battleActive) return;
         wasDragging = false;
-        e.preventDefault();  // prevent text selection
-        
-        // freeze current visual size immediately so changing
-        // to fixed positioning or applying transforms doesn't
-        // make the card jump or stretch. The inline width/height
-        // will be cleared on mouseup.
+        e.preventDefault();
+        img.setPointerCapture(e.pointerId);
         const rect = img.getBoundingClientRect();
         img.style.width = rect.width + 'px';
         img.style.height = rect.height + 'px';
-        
         isPressed = true;
         isDragging = false;
         startX = e.clientX;
@@ -348,13 +311,9 @@ function enableCardDrag(img) {
         velocityY = 0;
         translationX = 0;
         translationY = 0;
-        
-        // attach listener to window for full-screen drag detection
-        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('pointermove', handlePointerMove);
     });
-
-    // mouseup on window ensures drag stops everywhere, even outside card
-    window.addEventListener('mouseup', handleEndDrag);
+    window.addEventListener('pointerup', handleEndDrag);
 }
 
 

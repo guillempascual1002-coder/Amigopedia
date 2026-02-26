@@ -440,3 +440,63 @@ main {
     opacity: 1;
     transform: scale(1);
 }
+
+@media (max-width: 768px) {
+  body {
+    padding: 16px;
+    overflow-x: hidden;
+  }
+
+  .group-container {
+    width: 100%;
+  }
+
+  .group-row {
+    grid-template-columns: 1fr auto;
+    height: 56px;
+    font-size: 14px;
+  }
+
+  .card-slot img {
+    width: 90px;
+    height: auto;
+    max-width: 100%;
+    touch-action: none;
+  }
+
+  .battle-zone {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 400px;
+    height: 180px;
+    overflow: hidden;
+  }
+
+  .battle-zone img {
+    width: 90px;
+    height: auto;
+    max-width: 100%;
+  }
+
+  .envelope {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    width: 80px;
+    /* Reduce idle animation amplitude */
+    animation: float-mobile 2.5s ease-in-out infinite, shake 2s ease-in-out infinite;
+  }
+
+  @keyframes float-mobile {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+
+  .card-overlay img {
+    max-width: 85vw;
+    max-height: 75vh;
+  }
+}
