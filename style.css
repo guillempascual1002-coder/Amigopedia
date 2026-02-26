@@ -366,6 +366,12 @@ main {
     pointer-events: none;
 }
 
+.battle-zone.hidden-when-closed {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+}
+
 @media (min-width: 769px) {
     #envelope,
     .envelope {
@@ -551,14 +557,16 @@ main {
         z-index: 5;
     }
 
-  .envelope {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 80px;
-    /* Reduce idle animation amplitude */
-    animation: float-mobile 2.5s ease-in-out infinite, shake 2s ease-in-out infinite;
-  }
+    .envelope {
+        position: static;
+        width: 80px;
+        margin: 0 auto;
+        left: auto;
+        right: auto;
+        transform: none;
+        /* Reduce idle animation amplitude */
+        animation: float-mobile 2.5s ease-in-out infinite, shake 2s ease-in-out infinite;
+    }
 
   @keyframes float-mobile {
     0%,100% { transform: translateY(0); }

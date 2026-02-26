@@ -621,14 +621,17 @@ function setupEnvelope() {
 function updateEnvelopeVisibilityForAlbum() {
     const container = document.querySelector('.envelope-container');
     const envelope = document.getElementById('envelope');
+    const battleZone = document.getElementById('battle-zone');
     const anyOpen = !!document.querySelector('.group.open');
     if (!container || !envelope) return;
     if (anyOpen) {
         container.classList.add('hidden-during-album');
         envelope.style.pointerEvents = 'none';
+        if (battleZone) battleZone.classList.remove('hidden-when-closed');
     } else {
         container.classList.remove('hidden-during-album');
         updateEnvelopeState();
+        if (battleZone) battleZone.classList.add('hidden-when-closed');
     }
 }
 
