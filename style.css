@@ -504,7 +504,8 @@ main {
     max-height: 75vh;
   }
 
-    .pack-reveal-container {
+    /* Mobile pack overlay: real container is .pack-cards (5 images) */
+    .pack-cards {
         display: grid !important;
         grid-template-columns: repeat(6, 1fr);
         gap: 14px;
@@ -515,28 +516,14 @@ main {
         overflow: hidden;
     }
 
-    .pack-reveal-container img {
+    .pack-cards img {
         width: 100%;
         height: auto;
     }
 
-    .pack-reveal-container img:nth-child(1) {
-        grid-column: 2 / span 2;
-    }
-
-    .pack-reveal-container img:nth-child(2) {
-        grid-column: 4 / span 2;
-    }
-
-    .pack-reveal-container img:nth-child(3) {
-        grid-column: 1 / span 2;
-    }
-
-    .pack-reveal-container img:nth-child(4) {
-        grid-column: 3 / span 2;
-    }
-
-    .pack-reveal-container img:nth-child(5) {
-        grid-column: 5 / span 2;
-    }
+    .pack-cards img:nth-child(1) { grid-column: 2 / span 2; }
+    .pack-cards img:nth-child(2) { grid-column: 4 / span 2; }
+    .pack-cards img:nth-child(3) { grid-column: 1 / span 2; }
+    .pack-cards img:nth-child(4) { grid-column: 3 / span 2; }
+    .pack-cards img:nth-child(5) { grid-column: 5 / span 2; }
 }
