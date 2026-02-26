@@ -48,6 +48,13 @@ function getRemainingCards() {
     return allAvailableCards.filter(card => !collectedCards.has(card));
 }
 
+// returns true if there are still cards to collect
+function hasRemainingCards() {
+    const totalAvailable = allAvailableCards.length;
+    const totalCollected = Object.values(collection).reduce((sum, set) => sum + (set ? set.size : 0), 0);
+    return totalCollected < totalAvailable;
+}
+
 // total slots per group (constant)
 const groupTotals = {
     "black-angus": 10,
@@ -83,6 +90,7 @@ function init() {
 
         header.addEventListener('click', () => {
             section.classList.toggle('open');
+            updateEnvelopeVisibilityForAlbum();
         });
 
         section.appendChild(header);
@@ -111,6 +119,8 @@ function init() {
 
     setupModal();
     setupEnvelope();
+    updateEnvelopeState();
+    updateEnvelopeVisibilityForAlbum();
 }
 
 // convert key to display name
@@ -171,6 +181,7 @@ function addCard(filename) {
         slot.classList.add('has-card');
     }
     updateCounter(group);
+    updateEnvelopeState();
 }
 
 // utility: external code can call to add multiple cards
@@ -197,6 +208,8 @@ function enableCardDrag(img) {
     let velocityY = 0;
     let translationX = 0;       // current translation offset
     let translationY = 0;
+    let offsetX = 0;            // pointer offset from element left
+    let offsetY = 0;            // pointer offset from element top
 
     // Block all click events on album cards
     img.addEventListener('click', function(e) {
@@ -221,11 +234,6 @@ function enableCardDrag(img) {
                 isDragging = true;
                 wasDragging = true;
                 img.classList.add('dragging');
-                img.style.position = 'fixed';
-                img.style.margin = '0';
-                const rect = img.getBoundingClientRect();
-                img.style.width = rect.width + 'px';
-                img.style.height = rect.height + 'px';
                 img.style.pointerEvents = 'auto';
             } else {
                 return;
@@ -252,6 +260,17 @@ function enableCardDrag(img) {
         window.removeEventListener('pointermove', handlePointerMove);
         // if threshold was never exceeded, just a click - return without animation
         if (!isDragging) {
+            img.classList.remove('dragging', 'returning');
+            img.style.position = '';
+            img.style.margin = '';
+            img.style.width = '';
+            img.style.height = '';
+            img.style.left = '';
+            img.style.top = '';
+            img.style.zIndex = '';
+            img.style.pointerEvents = '';
+            img.style.transform = '';
+            img.style.boxShadow = '';
             return;
         }
         // check if we landed in the battle zone; if so clone and stop here
@@ -263,6 +282,9 @@ function enableCardDrag(img) {
             img.style.margin = '';
             img.style.width = '';
             img.style.height = '';
+            img.style.left = '';
+            img.style.top = '';
+            img.style.zIndex = '';
             img.style.pointerEvents = '';
             img.style.transform = '';
             img.style.boxShadow = '';
@@ -283,6 +305,9 @@ function enableCardDrag(img) {
                 img.style.margin = '';
                 img.style.width = '';
                 img.style.height = '';
+                img.style.left = '';
+                img.style.top = '';
+                img.style.zIndex = '';
                 img.style.pointerEvents = '';
                 img.style.transform = '';
                 img.style.boxShadow = '';
@@ -295,10 +320,24 @@ function enableCardDrag(img) {
         if (battleActive) return;
         wasDragging = false;
         e.preventDefault();
-        img.setPointerCapture(e.pointerId);
         const rect = img.getBoundingClientRect();
+        const startLeft = rect.left;
+        const startTop = rect.top;
+
+        // lock element to its visual position before any transform resets
+        img.style.transform = 'none';
+        img.style.position = 'fixed';
+        img.style.margin = '0';
+        img.style.left = `${startLeft}px`;
+        img.style.top = `${startTop}px`;
         img.style.width = rect.width + 'px';
         img.style.height = rect.height + 'px';
+
+        // compute pointer offset relative to element
+        offsetX = e.clientX - startLeft;
+        offsetY = e.clientY - startTop;
+
+        img.setPointerCapture(e.pointerId);
         isPressed = true;
         isDragging = false;
         startX = e.clientX;
@@ -573,9 +612,41 @@ function setupEnvelope() {
     env.addEventListener('click', () => {
         // ignore clicks if not in idle state
         if (envelopeState !== 'idle') return;
+        if (!hasRemainingCards()) return;
         
         handleEnvelopeClick();
     });
+}
+
+function updateEnvelopeVisibilityForAlbum() {
+    const container = document.querySelector('.envelope-container');
+    const envelope = document.getElementById('envelope');
+    const anyOpen = !!document.querySelector('.group.open');
+    if (!container || !envelope) return;
+    if (anyOpen) {
+        container.classList.add('hidden-during-album');
+        envelope.style.pointerEvents = 'none';
+    } else {
+        container.classList.remove('hidden-during-album');
+        updateEnvelopeState();
+    }
+}
+
+function updateEnvelopeState() {
+    const envelope = document.getElementById('envelope');
+    if (!envelope) return;
+
+    if (!hasRemainingCards()) {
+        envelope.classList.add('disabled');
+        envelope.style.pointerEvents = 'none';
+        envelope.style.display = 'none';
+        const text = document.querySelector('.envelope-text') || document.querySelector('.envelope-note');
+        if (text) text.textContent = 'no hay mas amigos por el momento';
+    } else {
+        envelope.classList.remove('disabled');
+        envelope.style.pointerEvents = 'auto';
+        envelope.style.display = 'block';
+    }
 }
 
 function handleEnvelopeClick() {
@@ -589,8 +660,8 @@ function handleEnvelopeClick() {
     env.style.transform = 'scale(0.95)';
     
     setTimeout(() => {
-        // change src to envelope-open.png
-        env.src = 'images/envelope-open.png';
+        // change src to envelope-open.gif
+        env.src = 'images/envelope-open.gif';
         env.style.transform = '';
         
         // after 200ms: trigger card reveal
@@ -611,44 +682,110 @@ function handleEnvelopeClick() {
 }
 
 // pack reveal logic ------------------------------------------------------
-// overlay displays five cards in a simple centered row and assigns them on outside click
+// overlay shows a stacked deck; click top card to reveal sequentially
 function showPackOverlay(filenames) {
     const overlay = document.createElement('div');
-    overlay.className = 'overlay';
+    overlay.className = 'overlay stack-overlay';
 
-    const container = document.createElement('div');
-    container.className = 'pack-cards';
+    const stack = document.createElement('div');
+    stack.className = 'card-stack';
 
-    filenames.forEach((name, idx) => {
+    const isMobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+
+    filenames.forEach((name, index) => {
+        const depth = filenames.length - 1 - index;
+        const offsetY = depth * 4;
+        const scale = 1 - depth * 0.02;
         const img = document.createElement('img');
-        img.className = 'pack-card';
+        img.className = 'stack-card';
         img.src = "images/" + name;
         console.log('Loading card from:', img.src);
         img.alt = name;
-        img.style.transitionDelay = `${idx * 0.1}s`;
-        container.appendChild(img);
+        img.dataset.cardName = name;
+        const baseTransform = `translate(-50%, -50%) translateY(${offsetY}px) scale(${scale})`;
+        img.dataset.baseTransform = baseTransform;
+        img.style.transform = baseTransform;
+        img.style.zIndex = String(200 + index);
+        stack.appendChild(img);
     });
 
-    overlay.appendChild(container);
+    overlay.appendChild(stack);
     document.body.appendChild(overlay);
+
+    const closeOverlay = () => {
+        overlay.classList.remove('visible');
+        setTimeout(() => {
+            if (overlay.parentNode) {
+                overlay.parentNode.removeChild(overlay);
+            }
+            returnEnvelope();
+        }, 300);
+    };
+
+    const revealNext = () => {
+        const topCard = stack.lastElementChild;
+        if (!topCard) {
+            closeOverlay();
+            return;
+        }
+
+        Array.from(stack.children).forEach(card => {
+            card.style.pointerEvents = card === topCard ? 'auto' : 'none';
+        });
+
+        const handleReveal = () => {
+            topCard.classList.add('stack-card-revealing');
+            topCard.style.transform = `${topCard.dataset.baseTransform} translateX(300px) rotate(8deg)`;
+            topCard.style.opacity = '0';
+            topCard.addEventListener('transitionend', () => {
+                addCard(topCard.dataset.cardName);
+                if (topCard.parentNode === stack) {
+                    stack.removeChild(topCard);
+                }
+                revealNext();
+            }, { once: true });
+        };
+
+        const detachHandlers = () => {
+            topCard.removeEventListener('click', clickHandler);
+            topCard.removeEventListener('pointerdown', onPointerDown);
+            window.removeEventListener('pointerup', onPointerUp);
+        };
+
+        const clickHandler = () => {
+            detachHandlers();
+            handleReveal();
+        };
+
+        let startX = 0;
+        let startY = 0;
+        const SWIPE_THRESHOLD = 50;
+
+        const onPointerDown = (e) => {
+            startX = e.clientX;
+            startY = e.clientY;
+            window.addEventListener('pointerup', onPointerUp, { once: true });
+        };
+
+        const onPointerUp = (e) => {
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+            if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+                detachHandlers();
+                handleReveal();
+            }
+        };
+
+        topCard.addEventListener('click', clickHandler);
+        if (isMobile) {
+            topCard.addEventListener('pointerdown', onPointerDown);
+        }
+    };
 
     // trigger fade-in animation
     requestAnimationFrame(() => overlay.classList.add('visible'));
 
-    overlay.addEventListener('click', e => {
-        if (e.target === overlay) {
-            // assign each revealed card by filename
-            filenames.forEach(fname => {
-                addCard(fname);
-            });
-            // teardown
-            overlay.classList.remove('visible');
-            setTimeout(() => {
-                document.body.removeChild(overlay);
-                returnEnvelope();
-            }, 300);
-        }
-    });
+    revealNext();
 }
 
 
@@ -657,7 +794,7 @@ function returnEnvelope() {
     envelopeState = 'returning';
     
     // reset envelope position below viewport with closed image
-    env.src = 'images/envelope-closed.png';
+    env.src = 'images/envelope-closed.gif';
     env.classList.add('hidden-envelope');
     
     // force reflow to ensure transition applies
