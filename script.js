@@ -1,14 +1,14 @@
 // drag threshold: minimum distance (pixels) before drag activates
 const DRAG_THRESHOLD = 6;
 
-// collection state: track which card numbers have been collected per group
+// collection state: track quantities per card number in each group
 const collection = {
-    "black-angus": new Set(),
-    "fuck-quesadilla": new Set(),
-    "blip-city": new Set(),
-    "helldivers": new Set(),
-    "pym": new Set(),
-    "otros": new Set()
+    "black-angus": {},
+    "fuck-quesadilla": {},
+    "blip-city": {},
+    "helldivers": {},
+    "pym": {},
+    "otros": {}
 };
 
 // all card filenames that exist in images/
@@ -31,8 +31,21 @@ const allAvailableCards = [
     // add more existing card filenames here
 ];
 
-// tracks which card filenames have been collected
-const collectedCards = new Set();
+// helper: ensure card record exists
+function ensureCardRecord(group, num) {
+    if (!collection[group]) collection[group] = {};
+    if (!collection[group][num]) {
+        collection[group][num] = { quantity: 0, wins: 0 };
+    }
+    return collection[group][num];
+}
+
+// helper to count unique collected cards across all groups
+function getUniqueCollectedCount() {
+    return Object.values(collection).reduce((sum, group) => {
+        return sum + Object.keys(group || {}).length;
+    }, 0);
+}
 
 // helper: shuffle array in place using Fisher-Yates
 function shuffleArray(arr) {
@@ -43,16 +56,19 @@ function shuffleArray(arr) {
     return arr;
 }
 
-// get list of cards not yet collected
+// get list of cards not yet collected (unique check)
 function getRemainingCards() {
-    return allAvailableCards.filter(card => !collectedCards.has(card));
+    return allAvailableCards.filter(card => {
+        const group = parseGroup(card);
+        const num = parseSlotNumber(card);
+        const groupMap = collection[group];
+        return !(groupMap && groupMap[num]);
+    });
 }
 
-// returns true if there are still cards to collect
+// duplicates allowed: envelope remains usable
 function hasRemainingCards() {
-    const totalAvailable = allAvailableCards.length;
-    const totalCollected = Object.values(collection).reduce((sum, set) => sum + (set ? set.size : 0), 0);
-    return totalCollected < totalAvailable;
+    return true;
 }
 
 // total slots per group (constant)
@@ -91,6 +107,7 @@ function init() {
         header.addEventListener('click', () => {
             section.classList.toggle('open');
             updateEnvelopeVisibilityForAlbum();
+            updateDisplayZoneVisibility();
         });
 
         section.appendChild(header);
@@ -116,11 +133,16 @@ function init() {
         updateCounter(key);
     });
 
+    loadCollection();
+    renderCollectionToDom();
+    updateAllCounters();
 
     setupModal();
     setupEnvelope();
+    setupDisplayZone();
     updateEnvelopeState();
     updateEnvelopeVisibilityForAlbum();
+    updateDisplayZoneVisibility();
 }
 
 // convert key to display name
@@ -130,10 +152,14 @@ function humanize(key) {
 
 // update the counter in a section header based on collection state
 function updateCounter(key) {
-    const count = collection[key] ? collection[key].size : 0;
+    const count = collection[key] ? Object.keys(collection[key]).length : 0;
     const total = groupTotals[key] || 0;
     const counterEl = document.querySelector(`.group[data-group="${key}"] .counter`);
     if (counterEl) counterEl.textContent = `${count}/${total}`;
+}
+
+function updateAllCounters() {
+    Object.keys(groupTotals).forEach(updateCounter);
 }
 
 // parse group portion of filename
@@ -154,19 +180,31 @@ function parseSlotNumber(filename) {
     return isNaN(num) ? null : num;
 }
 
+function buildFilename(group, num) {
+    return `${group}-${String(num).padStart(2, '0')}.png`;
+}
+
+function getCardInfoFromImg(img) {
+    const name = img.dataset.filename || img.alt || '';
+    let filename = name || '';
+    if (!filename && img.src) {
+        filename = img.src.split('/').pop().split('\\').pop();
+    }
+    const group = parseGroup(filename);
+    const num = parseSlotNumber(filename);
+    return { group, num, filename };
+}
+
 // add a single card file to its exact slot if not already present
 function addCard(filename) {
     const group = parseGroup(filename);
     const num = parseSlotNumber(filename);
     if (!group || num == null) return;
-    const set = collection[group];
-    if (!set) return;
-    if (set.has(num)) {
-        console.log('already collected', filename);
-        return;
-    }
-    set.add(num);
-    collectedCards.add(filename);
+    const groupMap = collection[group];
+    if (!groupMap) return;
+    const record = ensureCardRecord(group, num);
+    const hadCard = record.quantity > 0;
+    record.quantity += 1;
     const selector = `.card-slot[data-group="${group}"][data-slot="${num}"]`;
     const slot = document.querySelector(selector);
     if (slot && !slot.querySelector('img')) {
@@ -174,6 +212,7 @@ function addCard(filename) {
         img.src = "images/" + filename;
         console.log('Loading card from:', img.src);
         img.alt = filename;
+        img.dataset.filename = filename;
         img.addEventListener('click', () => openModal(img.src, img.alt));
         enableCardDrag(img);
         slot.appendChild(img);
@@ -182,6 +221,21 @@ function addCard(filename) {
     }
     updateCounter(group);
     updateEnvelopeState();
+    saveCollection();
+}
+
+function placeCardInSlot(group, num, filename) {
+    const selector = `.card-slot[data-group="${group}"][data-slot="${num}"]`;
+    const slot = document.querySelector(selector);
+    if (!slot || slot.querySelector('img')) return;
+    const img = document.createElement('img');
+    img.src = "images/" + filename;
+    img.alt = filename;
+    img.dataset.filename = filename;
+    img.addEventListener('click', () => openModal(img.src, img.alt));
+    enableCardDrag(img);
+    slot.appendChild(img);
+    slot.classList.add('has-card');
 }
 
 // utility: external code can call to add multiple cards
@@ -273,6 +327,13 @@ function enableCardDrag(img) {
             img.style.boxShadow = '';
             return;
         }
+        // check if we landed in the display zone (desktop only); if so move card and stop here
+        if (tryPlaceInDisplayZone(img, currentX, currentY)) {
+            wasDragging = true;
+            isDragging = false;
+            return;
+        }
+
         // check if we landed in the battle zone; if so clone and stop here
         if (tryPlaceInBattleZone(img, currentX, currentY)) {
             wasDragging = true;
@@ -318,6 +379,7 @@ function enableCardDrag(img) {
     // pointerdown: store position, enable listeners, but don't drag yet
     img.addEventListener('pointerdown', (e) => {
         if (battleActive) return;
+        if (img.dataset.displayLocked === 'true') return;
         wasDragging = false;
         e.preventDefault();
         const rect = img.getBoundingClientRect();
@@ -443,6 +505,14 @@ function closeModal() {
 
 // envelope state machine -------------------------------------------------
 let envelopeState = 'idle';
+const displayState = {
+    card: null,
+    originalParent: null,
+    originalNextSibling: null,
+    wrapper: null,
+    reflection: null,
+    cleanup: null
+};
 
 // battle arena globals ----------------------------------------------------
 let battleActive = false;
@@ -475,6 +545,8 @@ const battleController = {
         await wait(600); // victory animation duration
         winner.classList.add('battle-lose'); // fade out winner
         await wait(400); // pause before reset
+        // Track a battle victory for the winning card and persist the collection.
+        recordBattleWinFromImage(winner);
         this.resetBattle();
     },
     resetBattle() {
@@ -526,7 +598,8 @@ function shakeAnimation(el) {
         }, { once: true });
     });
 }
-
+        function displayStateCleanupOnResize() {
+        }
 function winAnimation(el) {
     return new Promise(resolve => {
         el.classList.add('battle-jump');
@@ -547,6 +620,59 @@ function loseAnimation(el) {
 
 function pointInRect(x, y, rect) {
     return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
+function tryPlaceInDisplayZone(img, x, y) {
+    if (!window.matchMedia || !window.matchMedia('(min-width: 1024px)').matches) return false;
+    const zone = document.getElementById('display-zone');
+    const container = zone ? zone.querySelector('.display-card-container') : null;
+    if (!zone || !container || !zone.classList.contains('visible')) return false;
+
+    const rect = zone.getBoundingClientRect();
+    if (!pointInRect(x, y, rect)) return false;
+
+    if (displayState.card && displayState.card !== img) {
+        closeDisplayZone();
+    }
+
+    displayState.originalParent = img.parentNode;
+    displayState.originalNextSibling = img.nextSibling;
+    displayState.card = img;
+
+    if (img.parentNode) {
+        img.parentNode.removeChild(img);
+    }
+    container.innerHTML = '';
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'display-card-wrapper enter active';
+    const reflection = document.createElement('div');
+    reflection.className = 'card-reflection';
+    wrapper.appendChild(img);
+    wrapper.appendChild(reflection);
+    container.appendChild(wrapper);
+
+    setupDisplayCardEffects(wrapper, reflection);
+    displayState.wrapper = wrapper;
+    displayState.reflection = reflection;
+
+    img.classList.remove('dragging', 'returning');
+    img.style.position = '';
+    img.style.margin = '';
+    img.style.width = '';
+    img.style.height = '';
+    img.style.left = '';
+    img.style.top = '';
+    img.style.zIndex = '';
+    img.style.pointerEvents = 'auto';
+    img.style.transform = '';
+    img.style.boxShadow = '';
+    img.dataset.displayLocked = 'true';
+
+    zone.classList.add('active', 'visible');
+    zone.classList.add('has-card');
+    updateDisplayStatsFromImage(img);
+    return true;
 }
 
 function tryPlaceInBattleZone(img, x, y) {
@@ -633,6 +759,145 @@ function updateEnvelopeVisibilityForAlbum() {
         updateEnvelopeState();
         if (battleZone) battleZone.classList.add('hidden-when-closed');
     }
+}
+
+function setupDisplayZone() {
+    const zone = document.getElementById('display-zone');
+    if (!zone) return;
+    const closeBtn = zone.querySelector('.display-close');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', () => {
+            closeDisplayZone();
+            updateDisplayZoneVisibility();
+        });
+    }
+}
+
+function closeDisplayZone() {
+    const zone = document.getElementById('display-zone');
+    const container = zone ? zone.querySelector('.display-card-container') : null;
+    if (displayState.cleanup) {
+        displayState.cleanup();
+        displayState.cleanup = null;
+    }
+    if (displayState.card && displayState.originalParent) {
+        const card = displayState.card;
+        card.dataset.displayLocked = '';
+        card.style.pointerEvents = '';
+        card.style.position = '';
+        card.style.margin = '';
+        card.style.width = '';
+        card.style.height = '';
+        card.style.left = '';
+        card.style.top = '';
+        card.style.zIndex = '';
+        card.style.transform = '';
+        card.style.boxShadow = '';
+        displayState.originalParent.insertBefore(card, displayState.originalNextSibling);
+    }
+    if (container) container.innerHTML = '';
+    displayState.card = null;
+    displayState.originalParent = null;
+    displayState.originalNextSibling = null;
+    displayState.wrapper = null;
+    displayState.reflection = null;
+    clearDisplayStats();
+    if (zone) {
+        zone.classList.remove('active');
+        zone.classList.remove('has-card');
+        // visibility will be handled by updateDisplayZoneVisibility
+    }
+}
+
+function updateDisplayZoneVisibility() {
+    const zone = document.getElementById('display-zone');
+    if (!zone) return;
+    const isDesktop = window.matchMedia && window.matchMedia('(min-width: 1024px)').matches;
+    const anyOpen = !!document.querySelector('.group.open');
+    if (!isDesktop || !anyOpen) {
+        closeDisplayZone();
+        zone.classList.remove('visible');
+        return;
+    }
+    zone.classList.add('visible');
+}
+
+function setupDisplayCardEffects(wrapper, reflection) {
+    const baseTransform = 'perspective(800px) rotateX(0deg) rotateY(0deg)';
+    const clamp = (val, min, max) => Math.min(Math.max(val, min), max);
+    wrapper.style.transform = baseTransform;
+
+    const handleMove = (e) => {
+        const rect = wrapper.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const rotateX = clamp((e.clientY - centerY) / 20, -6, 6);
+        const rotateY = clamp((centerX - e.clientX) / 20, -6, 6);
+        wrapper.style.transform = `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+
+        const percentX = ((e.clientX - rect.left) / rect.width) * 100;
+        const percentY = ((e.clientY - rect.top) / rect.height) * 100;
+        reflection.style.background = `radial-gradient(circle at ${percentX}% ${percentY}%, rgba(255,255,255,0.45), rgba(255,255,255,0.15) 30%, transparent 60%)`;
+        wrapper.classList.add('active');
+    };
+
+    const handleLeave = () => {
+        wrapper.style.transform = baseTransform;
+        wrapper.classList.remove('active');
+    };
+
+    const handleAnimEnd = () => {
+        wrapper.classList.remove('enter');
+    };
+
+    wrapper.addEventListener('mousemove', handleMove);
+    wrapper.addEventListener('mouseleave', handleLeave);
+    wrapper.addEventListener('animationend', handleAnimEnd, { once: true });
+
+    displayState.cleanup = () => {
+        wrapper.removeEventListener('mousemove', handleMove);
+        wrapper.removeEventListener('mouseleave', handleLeave);
+    };
+}
+
+function updateDisplayStatsFromImage(img) {
+    const zone = document.getElementById('display-zone');
+    if (!zone) return;
+    const albumEl = zone.querySelector('.stat-album');
+    const winsEl = zone.querySelector('.stat-wins');
+    const copiesEl = zone.querySelector('.stat-copies');
+    if (!albumEl || !winsEl || !copiesEl) return;
+
+    const info = getCardInfoFromImg(img);
+    if (!info.group || info.num == null) {
+        albumEl.textContent = '';
+        winsEl.textContent = '';
+        copiesEl.textContent = '';
+        return;
+    }
+
+    const record = (collection[info.group] && collection[info.group][info.num]) || { quantity: 0, wins: 0 };
+    const albumNumber = String(info.num).padStart(2, '0');
+    albumEl.textContent = `Número de álbum: ${albumNumber}`;
+    winsEl.textContent = `Victorias: ${record.wins || 0}`;
+    copiesEl.textContent = `Copias: ${record.quantity || 0}`;
+}
+
+function clearDisplayStats() {
+    const zone = document.getElementById('display-zone');
+    if (!zone) return;
+    const fields = zone.querySelectorAll('.stat-album, .stat-wins, .stat-copies');
+    fields.forEach(el => {
+        el.textContent = '';
+    });
+}
+
+function recordBattleWinFromImage(img) {
+    const info = getCardInfoFromImg(img);
+    if (!info.group || info.num == null) return;
+    const record = ensureCardRecord(info.group, info.num);
+    record.wins += 1;
+    saveCollection();
 }
 
 function updateEnvelopeState() {
@@ -815,19 +1080,45 @@ function returnEnvelope() {
 }
 
 function openEnvelope() {
-    // check if collection is complete
-    if (collectedCards.size === allAvailableCards.length) {
-        console.log('All cards collected');
-        return;
-    }
-    // get cards not yet collected
-    const remaining = getRemainingCards();
-    if (remaining.length === 0) {
-        return;
-    }
-    // shuffle and pick up to 5
-    const shuffled = shuffleArray([...remaining]);
+    // allow duplicates: draw from all available cards
+    const shuffled = shuffleArray([...allAvailableCards]);
     const picked = shuffled.slice(0, 5);
     showPackOverlay(picked);
+}
+
+function renderCollectionToDom() {
+    Object.entries(collection).forEach(([group, groupMap]) => {
+        Object.keys(groupMap || {}).forEach(numKey => {
+            const num = parseInt(numKey, 10);
+            const record = groupMap[num];
+            if (record && record.quantity > 0) {
+                const filename = buildFilename(group, num);
+                placeCardInSlot(group, num, filename);
+            }
+        });
+    });
+}
+
+function saveCollection() {
+    try {
+        localStorage.setItem('collection', JSON.stringify(collection));
+    } catch (e) {
+        console.warn('Failed to save collection', e);
+    }
+}
+
+function loadCollection() {
+    try {
+        const raw = localStorage.getItem('collection');
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        Object.keys(collection).forEach(group => {
+            if (data[group]) {
+                collection[group] = data[group];
+            }
+        });
+    } catch (e) {
+        console.warn('Failed to load collection', e);
+    }
 }
 
