@@ -13,6 +13,11 @@ body {
     padding: 20px;
 }
 
+/* hide display zone by default (mobile); desktop overrides in its media query */
+.display-zone {
+    display: none;
+}
+
 main {
     max-width: 650px; /* centered column */
     margin: 0 auto;
@@ -790,7 +795,7 @@ main {
 
     .envelope {
         position: static;
-        width: 70px;
+        width: 54px;
         margin: 0 auto;
         left: auto;
         right: auto;
@@ -805,7 +810,7 @@ main {
         display: flex;
         flex-direction: column-reverse;
         align-items: center;
-        bottom: 12px;
+        bottom: 8px;
     }
 
     .envelope-note {
