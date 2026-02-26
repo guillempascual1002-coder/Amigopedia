@@ -1,5 +1,7 @@
 // drag threshold: minimum distance (pixels) before drag activates
 const DRAG_THRESHOLD = 6;
+// pack cooldown duration (ms)
+const PACK_COOLDOWN = 7 * 1000;
 
 // collection state: track quantities per card number in each group
 const collection = {
@@ -8,7 +10,7 @@ const collection = {
     "blip-city": {},
     "helldivers": {},
     "pym": {},
-    "otros": {}
+    "especiales": {}
 };
 
 // all card filenames that exist in images/
@@ -78,7 +80,7 @@ const groupTotals = {
     "blip-city": 4,
     "helldivers": 14,
     "pym": 21,
-    "otros": 8
+    "especiales": 8
 };
 
 // initialization after DOM loads
@@ -140,6 +142,7 @@ function init() {
     setupModal();
     setupEnvelope();
     setupDisplayZone();
+    resumePackCooldown();
     updateEnvelopeState();
     updateEnvelopeVisibilityForAlbum();
     updateDisplayZoneVisibility();
@@ -517,6 +520,7 @@ const displayState = {
 // battle arena globals ----------------------------------------------------
 let battleActive = false;
 let isFighting = false;
+let cooldownInterval = null;
 const battleController = {
     leftImg: null,
     rightImg: null,
@@ -822,6 +826,36 @@ function updateDisplayZoneVisibility() {
     zone.classList.add('visible');
 }
 
+function getCooldownElements() {
+    return {
+        env: document.getElementById('envelope'),
+        note: document.querySelector('.envelope-note'),
+        timer: document.querySelector('.cooldown-timer')
+    };
+}
+
+function isCooldownActive() {
+    const stored = Number(localStorage.getItem('nextPackTime'));
+    return !!stored && stored > Date.now();
+}
+
+function showEnvelopeNow() {
+    const { env, note, timer } = getCooldownElements();
+    if (timer) timer.style.display = 'none';
+    if (env) {
+        env.style.display = 'block';
+        env.classList.add('hidden-envelope');
+        // force reflow before revealing to trigger transition
+        void env.offsetHeight;
+        env.classList.remove('hidden-envelope');
+        env.classList.add('idle');
+        env.src = 'images/envelope-closed.gif';
+        env.style.pointerEvents = 'auto';
+        envelopeState = 'idle';
+    }
+    if (note) note.style.display = '';
+}
+
 function setupDisplayCardEffects(wrapper, reflection) {
     const baseTransform = 'perspective(800px) rotateX(0deg) rotateY(0deg)';
     const clamp = (val, min, max) => Math.min(Math.max(val, min), max);
@@ -902,7 +936,15 @@ function recordBattleWinFromImage(img) {
 
 function updateEnvelopeState() {
     const envelope = document.getElementById('envelope');
+    const { note, timer } = getCooldownElements();
     if (!envelope) return;
+
+    if (isCooldownActive()) {
+        envelope.style.display = 'none';
+        if (note) note.style.display = 'none';
+        if (timer) timer.style.display = 'block';
+        return;
+    }
 
     if (!hasRemainingCards()) {
         envelope.classList.add('disabled');
@@ -910,10 +952,13 @@ function updateEnvelopeState() {
         envelope.style.display = 'none';
         const text = document.querySelector('.envelope-text') || document.querySelector('.envelope-note');
         if (text) text.textContent = 'no hay mas amigos por el momento';
+        if (timer) timer.style.display = 'none';
     } else {
         envelope.classList.remove('disabled');
         envelope.style.pointerEvents = 'auto';
         envelope.style.display = 'block';
+        if (note) note.style.display = '';
+        if (timer) timer.style.display = 'none';
     }
 }
 
@@ -935,6 +980,7 @@ function handleEnvelopeClick() {
         // after 200ms: trigger card reveal
         setTimeout(() => {
             openEnvelope();
+            startCooldown();
             
             // after 400ms: animate downward and fade out
             setTimeout(() => {
@@ -947,6 +993,54 @@ function handleEnvelopeClick() {
             }, 200);
         }, 200);
     }, 120);
+}
+
+function startCooldown(existingTime) {
+    if (!hasRemainingCards()) return;
+    const { env, note, timer } = getCooldownElements();
+    if (!env || !timer) return;
+
+    const targetTime = existingTime && existingTime > Date.now() ? existingTime : Date.now() + PACK_COOLDOWN;
+    localStorage.setItem('nextPackTime', targetTime);
+
+    if (cooldownInterval) {
+        clearInterval(cooldownInterval);
+        cooldownInterval = null;
+    }
+
+    env.style.display = 'none';
+    if (note) note.style.display = 'none';
+    timer.style.display = 'block';
+
+    const updateCountdown = () => {
+        const now = Date.now();
+        const remaining = Math.max(0, targetTime - now);
+        if (remaining <= 0) {
+            clearInterval(cooldownInterval);
+            cooldownInterval = null;
+            localStorage.removeItem('nextPackTime');
+            showEnvelopeNow();
+            updateEnvelopeState();
+            return;
+        }
+        const totalSeconds = Math.ceil(remaining / 1000);
+        const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+        const seconds = String(totalSeconds % 60).padStart(2, '0');
+        timer.textContent = `más amigos en ${minutes}:${seconds}`;
+    };
+
+    updateCountdown();
+    cooldownInterval = setInterval(updateCountdown, 1000);
+}
+
+function resumePackCooldown() {
+    const stored = Number(localStorage.getItem('nextPackTime'));
+    if (stored && stored > Date.now() && hasRemainingCards()) {
+        startCooldown(stored);
+    } else {
+        localStorage.removeItem('nextPackTime');
+        showEnvelopeNow();
+    }
 }
 
 // pack reveal logic ------------------------------------------------------
@@ -1053,12 +1147,25 @@ function showPackOverlay(filenames) {
     // trigger fade-in animation
     requestAnimationFrame(() => overlay.classList.add('visible'));
 
-    revealNext();
+    // small delay so cards feel like they emerge more gradually from the envelope
+    setTimeout(() => {
+        revealNext();
+    }, 350);
 }
 
 
 function returnEnvelope() {
     const env = document.getElementById('envelope');
+    const { note, timer } = getCooldownElements();
+    if (isCooldownActive()) {
+        if (env) {
+            env.style.display = 'none';
+            env.classList.add('hidden-envelope');
+        }
+        if (note) note.style.display = 'none';
+        if (timer) timer.style.display = 'block';
+        return;
+    }
     envelopeState = 'returning';
     
     // reset envelope position below viewport with closed image

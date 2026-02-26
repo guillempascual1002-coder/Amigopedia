@@ -44,6 +44,15 @@ main {
     animation: drift 8s ease-in-out infinite;
 }
 
+.group[data-group="especiales"] .group-header {
+    color: #b8860b;
+    text-shadow: 0 0 12px rgba(255, 215, 0, 0.35);
+}
+
+.group[data-group="especiales"] .counter {
+    color: #b8860b;
+}
+
 /* triangle indicator */
 .group-header::before {
     content: "▶";
@@ -334,12 +343,20 @@ main {
     margin-bottom: 4px;
 }
 
+.cooldown-timer {
+    font-size: 0.75rem;
+    color: #aaa;
+    text-align: center;
+    margin-top: 4px;
+    font-family: 'Inter', system-ui, sans-serif;
+}
+
 #envelope {
     width: 360px;
     height: auto;
     cursor: pointer;
     display: block;
-    transition: transform 0.4s ease, opacity 0.4s ease;
+    transition: transform 0.5s cubic-bezier(0.25, 0.8, 0.4, 1), opacity 0.5s ease;
 }
 
 .envelope.disabled {
@@ -353,7 +370,7 @@ main {
 }
 
 #envelope.hidden-envelope {
-    transform: translateY(150px);
+    transform: translateY(140vh);
     opacity: 0;
     pointer-events: none;
 }
@@ -795,7 +812,7 @@ main {
 
     .envelope {
         position: static;
-        width: 54px;
+        width: 46px;
         margin: 0 auto;
         left: auto;
         right: auto;
