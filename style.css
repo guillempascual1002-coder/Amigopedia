@@ -546,15 +546,15 @@ main {
   }
 
     .battle-zone {
-        position: fixed;
-        left: 50%;
-        transform: translateX(-50%);
-        bottom: 240px;
-        width: 90%;
-        max-width: 420px;
-        height: 180px;
-        overflow: hidden;
-        z-index: 5;
+          position: fixed;
+          left: 50%;
+          transform: translateX(-50%);
+          bottom: 16px;
+          width: 92%;
+          max-width: 420px;
+          height: 160px;
+          overflow: hidden;
+          z-index: 5;
     }
 
     .envelope {
@@ -566,6 +566,18 @@ main {
         transform: none;
         /* Reduce idle animation amplitude */
         animation: float-mobile 2.5s ease-in-out infinite, shake 2s ease-in-out infinite;
+    }
+
+    .envelope-container {
+        display: flex;
+        flex-direction: column-reverse;
+        align-items: center;
+        bottom: 12px;
+    }
+
+    .envelope-note {
+        margin-top: 6px;
+        margin-bottom: 0;
     }
 
   @keyframes float-mobile {
