@@ -4,9 +4,7 @@ const DRAG_THRESHOLD = 6;
 const PACK_COOLDOWN = 7 * 1000;
 // filenames that should render with holographic overlay (desktop only)
 const HOLO_CARDS = [
-    "black-angus-03.png",
-    "fuck-quesadilla-05.png",
-    "otros-02.png"
+    "especiales-01.png",
 ];
 
 // collection state: track quantities per card number in each group
@@ -15,7 +13,7 @@ const collection = {
     "fuck-quesadilla": {},
     "blip-city": {},
     "helldivers": {},
-    "pym": {},
+    "otros": {},
     "especiales": {}
 };
 
@@ -28,7 +26,6 @@ const allAvailableCards = [
     "black-angus-03.png",
     "black-angus-04.png",
     "black-angus-05.png",
-    "black-angus-06.png",
     "fuck-quesadilla-01.png",
     "fuck-quesadilla-02.png",
     "fuck-quesadilla-03.png",
@@ -36,6 +33,7 @@ const allAvailableCards = [
     "fuck-quesadilla-05.png",
     "fuck-quesadilla-09.png",
     "blip-city-01.png",
+    "especiales-01.png",
     // add more existing card filenames here
 ];
 
@@ -81,12 +79,12 @@ function hasRemainingCards() {
 
 // total slots per group (constant)
 const groupTotals = {
-    "black-angus": 10,
-    "fuck-quesadilla": 15,
+    "black-angus": 5,
+    "fuck-quesadilla": 16,
     "blip-city": 4,
-    "helldivers": 14,
-    "pym": 21,
-    "especiales": 8
+    "helldivers": 11,
+    "otros": 12,
+    "especiales": 4
 };
 
 // initialization after DOM loads
@@ -165,6 +163,11 @@ function updateCounter(key) {
     const total = groupTotals[key] || 0;
     const counterEl = document.querySelector(`.group[data-group="${key}"] .counter`);
     if (counterEl) counterEl.textContent = `${count}/${total}`;
+    const section = document.querySelector(`.group[data-group="${key}"]`);
+    if (section) {
+        const completed = total > 0 && count >= total;
+        section.classList.toggle('completed', completed);
+    }
 }
 
 function updateAllCounters() {

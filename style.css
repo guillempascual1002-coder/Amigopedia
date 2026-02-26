@@ -47,10 +47,50 @@ main {
 .group[data-group="especiales"] .group-header {
     color: #b8860b;
     text-shadow: 0 0 12px rgba(255, 215, 0, 0.35);
+    position: relative;
+    overflow: hidden;
 }
 
 .group[data-group="especiales"] .counter {
     color: #b8860b;
+}
+
+.group.completed:not([data-group="especiales"]) .group-header {
+    color: #2e8b57;
+    text-shadow: 0 0 12px rgba(46, 139, 87, 0.35);
+}
+
+.group.completed:not([data-group="especiales"]) .counter {
+    color: #2e8b57;
+}
+
+/* Especiales keeps its gold sheen even when completed */
+
+@keyframes goldSheen {
+    0% { transform: translateX(-120%); }
+    50% { transform: translateX(20%); }
+    100% { transform: translateX(120%); }
+}
+
+.group[data-group="especiales"] .group-header::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 60%;
+    height: 100%;
+    background: linear-gradient(120deg, rgba(255,255,255,0) 20%, rgba(255, 223, 128, 0.6) 50%, rgba(255,255,255,0) 80%);
+    mix-blend-mode: screen;
+    opacity: 0;
+    animation: goldSheen 3s linear infinite;
+    animation-play-state: paused;
+    pointer-events: none;
+}
+
+.group[data-group="especiales"] .group-header:hover::after,
+.group.open[data-group="especiales"] .group-header::after {
+    opacity: 0.85;
+    animation-play-state: running;
 }
 
 /* triangle indicator */
@@ -888,7 +928,7 @@ main {
 
     .envelope {
         position: static;
-        width: 35px;
+        width: 18px;
         margin: 0 auto;
         left: auto;
         right: auto;
@@ -903,7 +943,7 @@ main {
         display: flex;
         flex-direction: column-reverse;
         align-items: center;
-        bottom: 8px;
+        bottom: 0;
     }
 
     .envelope-note {
