@@ -1207,10 +1207,18 @@ function showPackOverlay(filenames) {
             const img = topCard.querySelector('img');
             if (img) {
                 img.removeEventListener('click', clickHandler);
+                img.removeEventListener('pointerup', tapReveal);
             }
+            topCard.removeEventListener('pointerup', tapReveal);
         };
 
         const clickHandler = () => {
+            detachHandlers();
+            handleReveal();
+        };
+
+        const tapReveal = (e) => {
+            e.preventDefault();
             detachHandlers();
             handleReveal();
         };
@@ -1238,9 +1246,13 @@ function showPackOverlay(filenames) {
         const topImg = topCard.querySelector('img');
         if (topImg) {
             topImg.addEventListener('click', clickHandler);
+            if (isMobile) {
+                topImg.addEventListener('pointerup', tapReveal);
+            }
         }
         if (isMobile) {
             topCard.addEventListener('pointerdown', onPointerDown);
+            topCard.addEventListener('pointerup', tapReveal);
         }
     };
 
