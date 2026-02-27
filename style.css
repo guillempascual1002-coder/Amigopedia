@@ -202,7 +202,7 @@ main {
 }
 
 .group.open .group-panel {
-    max-height: 1000px; /* large enough to show content */
+    max-height: 4000px; /* ample height so mobile panels show all slots */
 }
 
 /* card grid and slots (content visible when panel open) */
@@ -393,6 +393,43 @@ main {
 }
 
 .stack-card.stack-card-revealing {
+    opacity: 0;
+}
+
+/* Pack stack wrappers (shared desktop/mobile) */
+.pack-card-wrapper {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: auto;
+    transform-origin: center;
+    transition: transform 0.4s ease, opacity 0.4s ease;
+    pointer-events: auto;
+}
+
+.pack-card-wrapper .stack-card {
+    position: relative;
+    top: 0;
+    left: 0;
+    transform: none;
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 6px;
+    box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+    pointer-events: auto;
+}
+
+.pack-card-wrapper .holo-overlay {
+    opacity: 0.2;
+}
+
+.pack-card-wrapper:hover .holo-overlay {
+    opacity: 0.45;
+}
+
+.pack-card-wrapper.stack-card-revealing {
     opacity: 0;
 }
 
@@ -759,43 +796,6 @@ main {
         display: block;
     }
 
-    /* Pack stack */
-    .pack-card-wrapper {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 100%;
-        height: auto;
-        transform-origin: center;
-        transition: transform 0.4s ease, opacity 0.4s ease;
-        pointer-events: auto;
-    }
-
-    .pack-card-wrapper .stack-card {
-        position: relative;
-        top: 0;
-        left: 0;
-        transform: none;
-        width: 100%;
-        height: auto;
-        display: block;
-        border-radius: 6px;
-        box-shadow: 0 6px 18px rgba(0,0,0,0.25);
-        pointer-events: auto;
-    }
-
-    .pack-card-wrapper .holo-overlay {
-        opacity: 0.2;
-    }
-
-    .pack-card-wrapper:hover .holo-overlay {
-        opacity: 0.45;
-    }
-
-    .pack-card-wrapper.stack-card-revealing {
-        opacity: 0;
-    }
-
     .card-reflection {
         position: absolute;
         inset: 0;
@@ -1031,6 +1031,43 @@ main {
         pointer-events: none;
     }
 
+    /* Anchor envelope system to bottom on mobile */
+    .envelope-container {
+        position: fixed;
+        left: 50%;
+        transform: translateX(-50%);
+        bottom: 12px;
+        margin-top: 0;
+        padding-bottom: 0;
+        gap: 4px;
+        z-index: 120;
+        flex-direction: column;
+    }
+
+    #envelope,
+    .envelope {
+        order: 1;
+        position: static;
+        width: min(320px, 92vw);
+        height: auto;
+        margin: 0 auto;
+    }
+
+    .envelope-note,
+    .cooldown-timer {
+        position: static;
+        transform: none;
+        top: auto;
+        left: auto;
+        margin: 0;
+        order: 2;
+        pointer-events: none;
+    }
+
+    .cooldown-timer {
+        order: 3;
+    }
+
   .group-container {
     width: 100%;
   }
@@ -1057,33 +1094,6 @@ main {
         display: block;
     }
 
-    #envelope,
-    .envelope {
-        position: static;
-        width: min(300px, 92vw);
-        height: auto;
-        margin: 0 auto;
-        left: auto;
-        right: auto;
-        transform: translateZ(0);
-        backface-visibility: hidden;
-        will-change: transform;
-        /* Reduce idle animation amplitude and prevent shake flicker on mobile */
-        animation: float-mobile 2.5s ease-in-out infinite;
-    }
-
-    .envelope-container {
-        display: flex;
-        flex-direction: column-reverse;
-        align-items: center;
-        bottom: 0;
-    }
-
-    .envelope-note {
-        margin-top: 6px;
-        margin-bottom: 0;
-    }
-
   @keyframes float-mobile {
     0%,100% { transform: translateY(0); }
     50% { transform: translateY(-3px); }
@@ -1094,26 +1104,20 @@ main {
     max-height: 75vh;
   }
 
-    /* Mobile pack overlay: real container is .pack-cards (5 images) */
+    /* Mobile pack overlay: match desktop stacked behavior */
     .pack-cards {
-        display: grid !important;
-        grid-template-columns: repeat(6, 1fr);
-        gap: 14px;
-        width: 90%;
-        max-width: 420px;
+        display: flex !important;
+        justify-content: center;
+        align-items: center;
+        gap: 0;
+        width: 100%;
+        max-width: 340px;
         margin: 0 auto;
-        justify-items: center;
-        overflow: hidden;
+        position: relative;
     }
 
     .pack-cards img {
         width: 100%;
         height: auto;
     }
-
-    .pack-cards img:nth-child(1) { grid-column: 2 / span 2; }
-    .pack-cards img:nth-child(2) { grid-column: 4 / span 2; }
-    .pack-cards img:nth-child(3) { grid-column: 1 / span 2; }
-    .pack-cards img:nth-child(4) { grid-column: 3 / span 2; }
-    .pack-cards img:nth-child(5) { grid-column: 5 / span 2; }
 }
