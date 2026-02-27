@@ -39,7 +39,9 @@ body {
     box-shadow: 0 8px 20px rgba(0,0,0,0.12);
     z-index: 220;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
-    display: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .info-trigger:hover {
@@ -161,7 +163,7 @@ body {
 
 @media (min-width: 1024px) {
     .info-trigger {
-        display: inline-block;
+        display: inline-flex;
     }
 }
 
@@ -607,7 +609,7 @@ main {
 
 .mobile-inspect-card {
     position: relative;
-    width: 100%;
+    width: 75%;
     max-height: 70vh;
     display: flex;
     justify-content: center;
