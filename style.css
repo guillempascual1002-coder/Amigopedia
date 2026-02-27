@@ -1023,7 +1023,12 @@ main {
   body {
     padding: 16px;
     overflow-x: hidden;
+        padding-bottom: 220px; /* leave space so fixed envelope won't cover accordion */
   }
+
+    main {
+        padding-bottom: 220px;
+    }
 
     /* Hide and disable battle zone on mobile */
     .battle-zone {
@@ -1066,6 +1071,13 @@ main {
 
     .cooldown-timer {
         order: 3;
+    }
+
+    @media (max-width: 480px) {
+        #envelope,
+        .envelope {
+            width: min(260px, 88vw);
+        }
     }
 
   .group-container {
