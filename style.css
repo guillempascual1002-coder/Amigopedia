@@ -433,6 +433,45 @@ main {
     opacity: 0;
 }
 
+/* "¡Nueva!" badge and sparkles for freshly drawn cards (desktop + mobile) */
+.new-badge {
+    position: absolute;
+    top: -12px;
+    right: 12px;
+    background: #000;
+    color: #fff;
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    animation: badgePop 300ms ease-out;
+    pointer-events: none;
+    z-index: 3;
+}
+
+@keyframes badgePop {
+    0% { transform: scale(0.8); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.new-sparkles {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 20% 30%, rgba(255,255,255,0.6), transparent 30%),
+        radial-gradient(circle at 70% 60%, rgba(255,255,255,0.5), transparent 30%);
+    opacity: 0;
+    animation: sparkleFade 800ms ease-out;
+    z-index: 2;
+}
+
+@keyframes sparkleFade {
+    0% { opacity: 0; }
+    30% { opacity: 1; }
+    100% { opacity: 0; }
+}
+
 
 /* modal overlay */
 .modal {
@@ -819,6 +858,25 @@ main {
         animation: displayEnter 350ms cubic-bezier(.2,.8,.2,1);
     }
 
+.reveal-sparkles {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(circle at 20% 20%, rgba(255,255,255,0.45), transparent 30%),
+        radial-gradient(circle at 80% 30%, rgba(255,255,255,0.35), transparent 28%),
+        radial-gradient(circle at 30% 70%, rgba(255,255,255,0.4), transparent 32%),
+        radial-gradient(circle at 70% 80%, rgba(255,255,255,0.3), transparent 28%);
+    opacity: 0;
+    animation: screenSparkle 900ms ease-out;
+    z-index: 500;
+}
+
+@keyframes screenSparkle {
+    0% { opacity: 0; }
+    25% { opacity: 1; }
+    100% { opacity: 0; }
+}
     @keyframes displayEnter {
         0% {
             transform: scale(0.94);

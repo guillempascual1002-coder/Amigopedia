@@ -285,6 +285,33 @@ function addCard(filename) {
     saveCollection();
 }
 
+function isFirstCopy(filename) {
+    const group = parseGroup(filename);
+    const num = parseSlotNumber(filename);
+    if (!group || num == null) return false;
+    const record = collection[group] && collection[group][num];
+    return !record || record.quantity === 0;
+}
+
+function triggerSparkleOverlay() {
+    const spark = document.createElement('div');
+    spark.className = 'reveal-sparkles';
+    document.body.appendChild(spark);
+    const removeSpark = () => {
+        if (spark.parentNode) spark.parentNode.removeChild(spark);
+    };
+    spark.addEventListener('animationend', removeSpark, { once: true });
+    setTimeout(removeSpark, 1200);
+}
+
+function isFirstCopy(filename) {
+    const group = parseGroup(filename);
+    const num = parseSlotNumber(filename);
+    if (!group || num == null) return false;
+    const record = collection[group] && collection[group][num];
+    return !record || record.quantity === 0;
+}
+
 function placeCardInSlot(group, num, filename) {
     const selector = `.card-slot[data-group="${group}"][data-slot="${num}"]`;
     const slot = document.querySelector(selector);
@@ -1174,6 +1201,15 @@ function showPackOverlay(filenames) {
         node.dataset.baseTransform = baseTransform;
         node.style.transform = baseTransform;
         node.style.zIndex = String(200 + index);
+        if (isFirstCopy(name)) {
+            const badge = document.createElement('div');
+            badge.className = 'new-badge';
+            badge.textContent = '¡Nueva!';
+            const sparkles = document.createElement('div');
+            sparkles.className = 'new-sparkles';
+            node.appendChild(badge);
+            node.appendChild(sparkles);
+        }
         stack.appendChild(node);
     });
 
@@ -1216,12 +1252,17 @@ function showPackOverlay(filenames) {
             topCard.style.transform = `${topCard.dataset.baseTransform} translateX(300px) rotate(8deg)`;
             topCard.style.opacity = '0';
 
+            const img = topCard.querySelector('img');
+            const cardName = img ? img.dataset.cardName || img.alt : topCard.dataset.cardName;
+            const firstCopy = isFirstCopy(cardName);
+
             let finished = false;
             const finish = () => {
                 if (finished) return;
                 finished = true;
-                const img = topCard.querySelector('img');
-                const cardName = img ? img.dataset.cardName || img.alt : topCard.dataset.cardName;
+                if (firstCopy) {
+                    triggerSparkleOverlay();
+                }
                 addCard(cardName);
                 if (topCard.parentNode === stack) {
                     stack.removeChild(topCard);
