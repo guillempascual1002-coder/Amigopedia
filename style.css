@@ -360,9 +360,12 @@ main {
 /* Eliminar efecto de escala al hacer hover sobre cartas del álbum */
 /* .card-slot img:hover { transform: scale(1.05); } */
 
-.card-slot img.dragging {
+.card-slot img.dragging,
+.card-wrapper.dragging,
+.holo.dragging {
     cursor: grabbing;
-    z-index: 1000;
+    position: relative;
+    z-index: 999999 !important;
     transition: none;
     /* no transform - movement is handled inline in JS using translate only */
 }
