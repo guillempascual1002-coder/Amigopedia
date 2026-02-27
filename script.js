@@ -537,6 +537,7 @@ function setupModal() {
 let cardOverlay = null;
 let cardOverlayImg = null;
 let mobileInspect = { overlay: null, cleanup: null };
+let gyroPermissionStatus = 'unknown';
 
 function openModal(src, alt) {
     // Remove any existing overlay
@@ -584,7 +585,18 @@ function closeModal() {
     // Re-enable interactions if needed (drag/battle logic is already handled elsewhere)
 }
 
-function attachMobileInspectEffects(wrapper, reflection, holoOverlay) {
+function applyHoloMask(holoOverlay, percentX, clamp) {
+    if (!holoOverlay) return;
+    holoOverlay.style.opacity = '0.85';
+    const stripeWidth = 18;
+    const start = clamp(percentX - stripeWidth, 0, 100);
+    const end = clamp(percentX + stripeWidth, 0, 100);
+    const gradient = `linear-gradient(105deg, transparent ${start}%, rgba(255,255,255,1) ${percentX}%, transparent ${end}%)`;
+    holoOverlay.style.maskImage = gradient;
+    holoOverlay.style.webkitMaskImage = gradient;
+}
+
+function attachMobileInspectPointer(wrapper, reflection, holoOverlay) {
     const baseTransform = 'perspective(800px) rotateX(0deg) rotateY(0deg)';
     const clamp = (val, min, max) => Math.min(Math.max(val, min), max);
     wrapper.style.transform = baseTransform;
@@ -602,15 +614,7 @@ function attachMobileInspectEffects(wrapper, reflection, holoOverlay) {
         reflection.style.opacity = '1';
         reflection.style.background = `radial-gradient(circle at ${percentX}% ${percentY}%, rgba(255,255,255,0.45), rgba(255,255,255,0.15) 30%, transparent 60%)`;
 
-        if (holoOverlay) {
-            holoOverlay.style.opacity = '0.85';
-            const stripeWidth = 18;
-            const start = clamp(percentX - stripeWidth, 0, 100);
-            const end = clamp(percentX + stripeWidth, 0, 100);
-            const gradient = `linear-gradient(105deg, transparent ${start}%, rgba(255,255,255,1) ${percentX}%, transparent ${end}%)`;
-            holoOverlay.style.maskImage = gradient;
-            holoOverlay.style.webkitMaskImage = gradient;
-        }
+        applyHoloMask(holoOverlay, percentX, clamp);
     };
 
     const handleLeave = () => {
@@ -630,6 +634,52 @@ function attachMobileInspectEffects(wrapper, reflection, holoOverlay) {
         wrapper.removeEventListener('pointermove', handleMove);
         wrapper.removeEventListener('pointerleave', handleLeave);
     };
+}
+
+function attachMobileInspectGyro(wrapper, reflection, holoOverlay) {
+    const baseTransform = 'perspective(800px) rotateX(0deg) rotateY(0deg)';
+    const clamp = (val, min, max) => Math.min(Math.max(val, min), max);
+    wrapper.style.transform = baseTransform;
+
+    const handleOrientation = (e) => {
+        const beta = clamp(e.beta || 0, -45, 45);   // front-back tilt
+        const gamma = clamp(e.gamma || 0, -45, 45); // left-right tilt
+        const rotateX = clamp(beta / 3, -10, 10);
+        const rotateY = clamp(gamma / 2, -10, 10);
+        wrapper.style.transform = `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+
+        // Map tilt to a 0-100 range for light hotspot
+        const percentX = clamp(((rotateY / 10) + 1) * 50, 0, 100);
+        const percentY = clamp((1 - (rotateX / 10)) * 50, 0, 100);
+        reflection.style.opacity = '1';
+        reflection.style.background = `radial-gradient(circle at ${percentX}% ${percentY}%, rgba(255,255,255,0.45), rgba(255,255,255,0.15) 30%, transparent 60%)`;
+
+        applyHoloMask(holoOverlay, percentX, clamp);
+    };
+
+    window.addEventListener('deviceorientation', handleOrientation);
+
+    return () => {
+        window.removeEventListener('deviceorientation', handleOrientation);
+    };
+}
+
+async function requestGyroPermission() {
+    if (typeof DeviceOrientationEvent === 'undefined') return false;
+    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+        if (gyroPermissionStatus === 'granted') return true;
+        try {
+            const res = await DeviceOrientationEvent.requestPermission();
+            gyroPermissionStatus = res === 'granted' ? 'granted' : 'denied';
+            return res === 'granted';
+        } catch (e) {
+            gyroPermissionStatus = 'denied';
+            return false;
+        }
+    }
+    // non-iOS browsers usually allow without prompt
+    gyroPermissionStatus = 'granted';
+    return true;
 }
 
 function closeMobileInspect() {
@@ -709,13 +759,21 @@ function openMobileInspect(img) {
     panel.appendChild(stats);
     overlay.appendChild(panel);
 
-    const cleanupEffects = attachMobileInspectEffects(cardWrap, reflection, holoOverlay);
+    let cleanupEffects = attachMobileInspectPointer(cardWrap, reflection, holoOverlay);
 
     overlay.addEventListener('click', () => closeMobileInspect());
     panel.addEventListener('click', (e) => e.stopPropagation());
 
     document.body.style.overflow = 'hidden';
     document.body.appendChild(overlay);
+
+    // Try to switch to gyro-based tilt if available
+    requestGyroPermission().then(granted => {
+        if (!granted) return;
+        if (cleanupEffects) cleanupEffects();
+        cleanupEffects = attachMobileInspectGyro(cardWrap, reflection, holoOverlay);
+        mobileInspect.cleanup = cleanupEffects;
+    }).catch(() => {});
 
     mobileInspect = { overlay, cleanup: cleanupEffects };
 }
