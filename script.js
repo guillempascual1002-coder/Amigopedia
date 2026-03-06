@@ -1,10 +1,16 @@
 // drag threshold: minimum distance (pixels) before drag activates
 const DRAG_THRESHOLD = 6;
 // pack cooldown duration (ms)
-const PACK_COOLDOWN = 7 * 1000;
+const PACK_COOLDOWN = 10 * 1000;
+const NEW_ALBUM_BADGES_KEY = 'newAlbumBadges';
+const NEW_SLOT_BADGES_KEY = 'newSlotBadges';
 // audio assets
 const packOpenSound = new Audio("sounds/pack-open.mp3");
 const cardRevealSound = new Audio("sounds/card-reveal.mp3");
+const drawerOpenSound = new Audio("sounds/drawer.mp3");
+const drawerCloseSound = new Audio("sounds/drawer.mp3");
+const albumOpenSound = new Audio("sounds/open-album.mp3");
+const conseguirFichasSound = new Audio("sounds/conseguirfichas.mp3");
 packOpenSound.volume = 0.6;
 cardRevealSound.volume = 0.5;
 // filenames that should render with holographic overlay (desktop only)
@@ -22,25 +28,58 @@ const collection = {
     "especiales": {}
 };
 
+const newAlbumBadges = {};
+const newSlotBadges = {};
+
 // all card filenames that exist in images/
 // this is the single source of truth for available cards
 // only add filenames if the corresponding image file actually exists
 const allAvailableCards = [
-    "black-angus-01.png",
-    "black-angus-02.png",
-    "black-angus-03.png",
-    "black-angus-04.png",
-    "black-angus-05.png",
+
     "fuck-quesadilla-01.png",
     "fuck-quesadilla-02.png",
     "fuck-quesadilla-03.png",
     "fuck-quesadilla-04.png",
     "fuck-quesadilla-05.png",
-    "fuck-quesadilla-09.png",
     "blip-city-01.png",
+    "blip-city-02.png",
+    "blip-city-03.png",
+    "blip-city-04.png",
+    "black-angus-01.png",
+    "black-angus-02.png",
+    "black-angus-03.png",
+    "black-angus-04.png",
+    "helldivers-01.png",
+    "helldivers-02.png",
+    "otros-01.png",
+    "otros-02.png",
+    "fuck-quesadilla-06.png",
     "especiales-01.png",
     // add more existing card filenames here
 ];
+
+const CARD_DESCRIPTIONS = {
+    "fuck-quesadilla-01.png": "Rubén Osma",
+    "fuck-quesadilla-02.png": "Julia Martinez",
+    "fuck-quesadilla-03.png": "Javi Carrion",
+    "fuck-quesadilla-04.png": "Miquel Serra",
+    "fuck-quesadilla-05.png": "Pau Arlandis",
+    "blip-city-01.png": "Guillem Pascual",
+    "blip-city-02.png": "Asier Ribelles",
+    "blip-city-03.png": "Yulian Krvavych",
+    "blip-city-04.png": "Denis Anatoliev",
+    "black-angus-01.png": "Sara Chacón",
+    "black-angus-02.png": "Andrea Pastor",
+    "black-angus-03.png": "Maria Xiaan",
+    "black-angus-04.png": "Claudia Casanova",
+    "helldivers-01.png": "Iván Soriano",
+    "helldivers-02.png": "Hector Cervera",
+    "otros-01.png": "Celia Calatayud",
+    "otros-02.png": "Andreu Martinez",
+    "fuck-quesadilla-06.png": "Julia Ak:Julss",
+    "especiales-01.png": "Carmen Sánchez",
+    // add descriptions here: "filename.png": "Texto descriptivo de la carta"
+};
 
 // helper: ensure card record exists
 function ensureCardRecord(group, num) {
@@ -122,9 +161,15 @@ function init() {
         header.appendChild(counter);
 
         header.addEventListener('click', () => {
+            const willOpen = !section.classList.contains('open');
             section.classList.toggle('open');
+            playSound(albumOpenSound);
+            if (willOpen) {
+                setAlbumNewBadge(key, false);
+            }
             updateEnvelopeVisibilityForAlbum();
             updateDisplayZoneVisibility();
+            updateScrollLockForAlbum();
         });
 
         section.appendChild(header);
@@ -141,6 +186,11 @@ function init() {
             slot.className = 'card-slot';
             slot.dataset.group = key;
             slot.dataset.slot = i;
+            slot.addEventListener('pointerenter', () => {
+                if (!slot.classList.contains('is-new')) return;
+                if (!slot.classList.contains('has-card')) return;
+                setSlotNewBadge(key, i, false);
+            });
             grid.appendChild(slot);
         }
         panel.appendChild(grid);
@@ -151,17 +201,191 @@ function init() {
     });
 
     loadCollection();
+    loadNewAlbumBadges();
+    loadNewSlotBadges();
     renderCollectionToDom();
     updateAllCounters();
+    applyAllAlbumNewBadges();
+    applyAllSlotNewBadges();
 
     setupModal();
     setupEnvelope();
+    setupConseguirFichasBtn();
+    setupBottomDrawerControl();
+    setupLeftDrawerControl();
+        setupRightDrawerControl();
     setupDisplayZone();
+    setupDrawerToggleSound();
     setupInfoOverlay();
     resumePackCooldown();
     updateEnvelopeState();
     updateEnvelopeVisibilityForAlbum();
     updateDisplayZoneVisibility();
+    updateScrollLockForAlbum();
+}
+
+function setupDrawerToggleSound() {
+    const battleToggle = document.getElementById('battle-drawer-toggle');
+    const inspectToggle = document.getElementById('inspect-drawer-toggle');
+
+    if (battleToggle) {
+        battleToggle.addEventListener('change', () => {
+            if (!battleToggle.checked) {
+                if (battleActive || isFighting) {
+                    battleToggle.checked = true;
+                    return;
+                }
+                battleController.resetBattle();
+            }
+            playSound(battleToggle.checked ? drawerOpenSound : drawerCloseSound);
+        });
+    }
+
+    if (inspectToggle) {
+        inspectToggle.addEventListener('change', () => {
+            playSound(inspectToggle.checked ? drawerOpenSound : drawerCloseSound);
+        });
+    }
+}
+
+function updateScrollLockForAlbum() {
+    const anyOpen = !!document.querySelector('.group.open');
+    document.body.classList.toggle('album-open', anyOpen);
+    if (!anyOpen) {
+        const battleToggle = document.getElementById('battle-drawer-toggle');
+        const inspectToggle = document.getElementById('inspect-drawer-toggle');
+        if (battleToggle) battleToggle.checked = false;
+        if (inspectToggle) inspectToggle.checked = false;
+    }
+}
+
+function setupBottomDrawerControl() {
+    const control = document.querySelector('.open-pack-text-bottom');
+    const panel = document.getElementById('bottom-drawer-panel');
+    const battleZone = document.getElementById('battle-zone');
+    if (!control || !panel) return;
+
+    const plusEl = control.querySelector('.open-pack-plus');
+    const labelEl = control.querySelector('.open-pack-label');
+    if (!plusEl || !labelEl) return;
+
+    const renderBottomDrawerState = () => {
+        const open = bottomDrawerState.isOpen;
+        const isMobile = window.matchMedia && window.matchMedia('(max-width: 1024px)').matches;
+        panel.classList.toggle('is-open', open);
+        panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+        control.classList.toggle('is-open', open);
+        control.setAttribute('aria-expanded', open ? 'true' : 'false');
+        control.setAttribute('aria-label', open ? 'Cerrar cajonera inferior' : 'Abrir cajonera inferior');
+        labelEl.textContent = open ? 'CERRAR' : 'ABRIR';
+        plusEl.textContent = open ? '-' : '+';
+        if (battleZone) battleZone.classList.toggle('mobile-bottom-visible', isMobile && open);
+    };
+
+    const toggleBottomDrawer = () => {
+        bottomDrawerState.isOpen = !bottomDrawerState.isOpen;
+        renderBottomDrawerState();
+        playSound(drawerOpenSound);
+    };
+
+    control.addEventListener('click', (e) => {
+        e.preventDefault();
+        toggleBottomDrawer();
+    });
+
+    control.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        toggleBottomDrawer();
+    });
+
+    window.addEventListener('resize', renderBottomDrawerState);
+
+    renderBottomDrawerState();
+}
+
+function setupLeftDrawerControl() {
+    const control = document.querySelector('.open-pack-text-side');
+    const panel = document.getElementById('left-drawer-panel');
+    if (!control || !panel) return;
+
+    const plusEl = control.querySelector('.open-pack-plus');
+    const labelEl = control.querySelector('.open-pack-label');
+    if (!plusEl || !labelEl) return;
+
+    const battleZone = document.getElementById('battle-zone');
+
+    const renderLeftDrawerState = () => {
+        const open = leftDrawerState.isOpen;
+        panel.classList.toggle('is-open', open);
+        panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+        control.classList.toggle('is-open', open);
+        control.setAttribute('aria-expanded', open ? 'true' : 'false');
+        control.setAttribute('aria-label', open ? 'Cerrar cajonera izquierda' : 'Abrir cajonera izquierda');
+        labelEl.textContent = open ? 'CERRAR' : 'ABRIR';
+        plusEl.textContent = open ? '-' : '+';
+        if (battleZone) battleZone.classList.toggle('visible', open);
+    };
+
+    const toggleLeftDrawer = () => {
+        leftDrawerState.isOpen = !leftDrawerState.isOpen;
+        renderLeftDrawerState();
+        playSound(drawerOpenSound);
+    };
+
+    control.addEventListener('click', (e) => {
+        e.preventDefault();
+        toggleLeftDrawer();
+    });
+
+    control.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        toggleLeftDrawer();
+    });
+
+    renderLeftDrawerState();
+}
+
+function setupRightDrawerControl() {
+    const control = document.querySelector('.open-pack-text-right');
+    const panel = document.getElementById('right-drawer-panel');
+    if (!control || !panel) return;
+
+    const plusEl = control.querySelector('.open-pack-plus');
+    const labelEl = control.querySelector('.open-pack-label');
+    if (!plusEl || !labelEl) return;
+
+    const renderRightDrawerState = () => {
+        const open = rightDrawerState.isOpen;
+        panel.classList.toggle('is-open', open);
+        panel.setAttribute('aria-hidden', open ? 'false' : 'true');
+        control.classList.toggle('is-open', open);
+        control.setAttribute('aria-expanded', open ? 'true' : 'false');
+        control.setAttribute('aria-label', open ? 'Cerrar cajonera derecha' : 'Abrir cajonera derecha');
+        labelEl.textContent = open ? 'CERRAR' : 'ABRIR';
+        plusEl.textContent = open ? '-' : '+';
+        updateDisplayZoneVisibility();
+    };
+
+    const toggleRightDrawer = () => {
+        rightDrawerState.isOpen = !rightDrawerState.isOpen;
+        renderRightDrawerState();
+        playSound(drawerOpenSound);
+    };
+
+    control.addEventListener('click', (e) => {
+        e.preventDefault();
+        toggleRightDrawer();
+    });
+
+    control.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        toggleRightDrawer();
+    });
+
+    renderRightDrawerState();
 }
 
 // convert key to display name
@@ -184,6 +408,99 @@ function updateCounter(key) {
 
 function updateAllCounters() {
     Object.keys(groupTotals).forEach(updateCounter);
+}
+
+function setAlbumNewBadge(group, enabled) {
+    if (enabled) {
+        newAlbumBadges[group] = true;
+    } else {
+        delete newAlbumBadges[group];
+    }
+    updateAlbumNewBadge(group);
+    saveNewAlbumBadges();
+}
+
+function updateAlbumNewBadge(group) {
+    const section = document.querySelector(`.group[data-group="${group}"]`);
+    if (!section) return;
+    section.classList.toggle('has-new', !!newAlbumBadges[group]);
+}
+
+function applyAllAlbumNewBadges() {
+    Object.keys(groupTotals).forEach(updateAlbumNewBadge);
+}
+
+function getSlotBadgeKey(group, num) {
+    return `${group}:${num}`;
+}
+
+function setSlotNewBadge(group, num, enabled) {
+    const key = getSlotBadgeKey(group, num);
+    if (enabled) {
+        newSlotBadges[key] = true;
+    } else {
+        delete newSlotBadges[key];
+    }
+    updateSlotNewBadge(group, num);
+    saveNewSlotBadges();
+}
+
+function updateSlotNewBadge(group, num) {
+    const slot = document.querySelector(`.card-slot[data-group="${group}"][data-slot="${num}"]`);
+    if (!slot) return;
+    const key = getSlotBadgeKey(group, num);
+    slot.classList.toggle('is-new', !!newSlotBadges[key]);
+}
+
+function applyAllSlotNewBadges() {
+    document.querySelectorAll('.card-slot').forEach(slot => {
+        const group = slot.dataset.group;
+        const num = Number(slot.dataset.slot);
+        if (!group || !num) return;
+        updateSlotNewBadge(group, num);
+    });
+}
+
+function saveNewAlbumBadges() {
+    try {
+        localStorage.setItem(NEW_ALBUM_BADGES_KEY, JSON.stringify(newAlbumBadges));
+    } catch (e) {
+        console.warn('Failed to save album badges', e);
+    }
+}
+
+function saveNewSlotBadges() {
+    try {
+        localStorage.setItem(NEW_SLOT_BADGES_KEY, JSON.stringify(newSlotBadges));
+    } catch (e) {
+        console.warn('Failed to save slot badges', e);
+    }
+}
+
+function loadNewAlbumBadges() {
+    try {
+        const raw = localStorage.getItem(NEW_ALBUM_BADGES_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        Object.keys(groupTotals).forEach(group => {
+            if (data[group]) newAlbumBadges[group] = true;
+        });
+    } catch (e) {
+        console.warn('Failed to load album badges', e);
+    }
+}
+
+function loadNewSlotBadges() {
+    try {
+        const raw = localStorage.getItem(NEW_SLOT_BADGES_KEY);
+        if (!raw) return;
+        const data = JSON.parse(raw);
+        Object.keys(data || {}).forEach(key => {
+            if (data[key]) newSlotBadges[key] = true;
+        });
+    } catch (e) {
+        console.warn('Failed to load slot badges', e);
+    }
 }
 
 // parse group portion of filename
@@ -212,6 +529,33 @@ function isHoloCard(filename) {
     return HOLO_CARDS.includes(filename);
 }
 
+function isDepthCard(filename) {
+    return !!filename;
+}
+
+function createDepthLayers(filename) {
+    const depth = document.createElement('div');
+    depth.className = 'card-depth';
+
+    const baseImg = document.createElement('img');
+    baseImg.className = 'depth-base';
+    baseImg.src = 'images/' + filename;
+    baseImg.alt = filename;
+    baseImg.dataset.filename = filename;
+
+    const upFilename = filename.replace(/\.png$/i, '-up.png');
+    const topImg = document.createElement('img');
+    topImg.className = 'depth-top';
+    topImg.src = 'images/' + upFilename;
+    topImg.alt = upFilename;
+    topImg.setAttribute('aria-hidden', 'true');
+
+    depth.appendChild(baseImg);
+    depth.appendChild(topImg);
+
+    return { depth, baseImg };
+}
+
 function createCardElement(filename, wrapperClass, { wrapNonHolo = false, allowHolo = false } = {}) {
     const img = document.createElement('img');
     img.src = "images/" + filename;
@@ -220,24 +564,44 @@ function createCardElement(filename, wrapperClass, { wrapNonHolo = false, allowH
 
     const isDesktop = window.matchMedia && window.matchMedia('(min-width: 1024px)').matches;
     const applyHolo = allowHolo && isDesktop && isHoloCard(filename);
+    const applyDepth = isDepthCard(filename);
+
+    const getCardContent = () => {
+        if (!applyDepth) return { node: img, displayImg: img };
+        const { depth, baseImg } = createDepthLayers(filename);
+        return { node: depth, displayImg: baseImg };
+    };
 
     if (applyHolo) {
         const wrapper = document.createElement('div');
         wrapper.className = `${wrapperClass || 'card-wrapper'} holo`;
+        if (applyDepth) wrapper.classList.add('depth-card');
         wrapper.dataset.filename = filename;
-        wrapper.appendChild(img);
+        const content = getCardContent();
+        wrapper.appendChild(content.node);
         const overlay = document.createElement('div');
         overlay.className = 'holo-overlay';
         wrapper.appendChild(overlay);
-        return { node: wrapper, img, dragTarget: wrapper };
+        return { node: wrapper, img: content.displayImg, dragTarget: wrapper };
     }
 
     if (wrapNonHolo && wrapperClass) {
         const wrapper = document.createElement('div');
         wrapper.className = wrapperClass;
+        if (applyDepth) wrapper.classList.add('depth-card');
         wrapper.dataset.filename = filename;
-        wrapper.appendChild(img);
-        return { node: wrapper, img, dragTarget: wrapper };
+        const content = getCardContent();
+        wrapper.appendChild(content.node);
+        return { node: wrapper, img: content.displayImg, dragTarget: wrapper };
+    }
+
+    if (applyDepth) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'depth-card';
+        wrapper.dataset.filename = filename;
+        const content = getCardContent();
+        wrapper.appendChild(content.node);
+        return { node: wrapper, img: content.displayImg, dragTarget: wrapper };
     }
 
     return { node: img, img, dragTarget: img };
@@ -269,6 +633,8 @@ function addCard(filename) {
     if (!groupMap) return;
     const record = ensureCardRecord(group, num);
     const hadCard = record.quantity > 0;
+    const section = document.querySelector(`.group[data-group="${group}"]`);
+    const isOpen = !!(section && section.classList.contains('open'));
     record.quantity += 1;
     const selector = `.card-slot[data-group="${group}"][data-slot="${num}"]`;
     const slot = document.querySelector(selector);
@@ -281,6 +647,12 @@ function addCard(filename) {
         slot.classList.add('has-card');
     }
     updateCounter(group);
+    if (!hadCard) {
+        setSlotNewBadge(group, num, true);
+    }
+    if (!hadCard && !isOpen) {
+        setAlbumNewBadge(group, true);
+    }
     updateEnvelopeState();
     saveCollection();
 }
@@ -337,6 +709,7 @@ function enableCardDrag(img) {
     let isPressed = false;      // mouse button down
     let isDragging = false;     // threshold exceeded, dragging active
     let wasDragging = false;    // used to suppress click event after drag
+    let inspectOpenedFromPointer = false;
     let startX = 0;             // initial mouse position
     let startY = 0;
     let currentX = 0;           // current mouse position
@@ -349,11 +722,38 @@ function enableCardDrag(img) {
     let translationY = 0;
     let offsetX = 0;            // pointer offset from element left
     let offsetY = 0;            // pointer offset from element top
+    let dragHomeParent = null;
+    let dragHomeNextSibling = null;
+
+    const captureDragHome = () => {
+        if (dragHomeParent) return;
+        dragHomeParent = img.parentNode || null;
+        dragHomeNextSibling = img.nextSibling || null;
+        img._dragHomeParent = dragHomeParent;
+        img._dragHomeNextSibling = dragHomeNextSibling;
+    };
+
+    const restoreDragHome = () => {
+        if (!dragHomeParent) return;
+        if (img.parentNode !== dragHomeParent) {
+            dragHomeParent.insertBefore(img, dragHomeNextSibling);
+        }
+        dragHomeParent = null;
+        dragHomeNextSibling = null;
+        img._dragHomeParent = null;
+        img._dragHomeNextSibling = null;
+    };
 
     // Click/tap: on desktop keep blocked; on mobile open inspect overlay when not dragged
     img.addEventListener('click', function(e) {
         const isDesktop = window.matchMedia && window.matchMedia('(min-width: 1024px)').matches;
         if (isDesktop) {
+            e.preventDefault();
+            e.stopPropagation();
+            return false;
+        }
+        if (inspectOpenedFromPointer) {
+            inspectOpenedFromPointer = false;
             e.preventDefault();
             e.stopPropagation();
             return false;
@@ -410,6 +810,7 @@ function enableCardDrag(img) {
         window.removeEventListener('pointermove', handlePointerMove);
         // if threshold was never exceeded, just a click - return without animation
         if (!isDragging) {
+            restoreDragHome();
             img.classList.remove('dragging', 'returning');
             img.style.position = '';
             img.style.margin = '';
@@ -421,6 +822,11 @@ function enableCardDrag(img) {
             img.style.pointerEvents = '';
             img.style.transform = '';
             img.style.boxShadow = '';
+            const isDesktop = window.matchMedia && window.matchMedia('(min-width: 1024px)').matches;
+            if (!isDesktop) {
+                inspectOpenedFromPointer = true;
+                openMobileInspect(img);
+            }
             return;
         }
         // check if we landed in the display zone (desktop only); if so move card and stop here
@@ -445,6 +851,7 @@ function enableCardDrag(img) {
             img.style.pointerEvents = '';
             img.style.transform = '';
             img.style.boxShadow = '';
+            restoreDragHome();
             return;
         }
         isDragging = false;
@@ -468,6 +875,7 @@ function enableCardDrag(img) {
                 img.style.pointerEvents = '';
                 img.style.transform = '';
                 img.style.boxShadow = '';
+                restoreDragHome();
             }, 500);
         }, 50);
     };
@@ -481,6 +889,7 @@ function enableCardDrag(img) {
         const rect = img.getBoundingClientRect();
         const startLeft = rect.left;
         const startTop = rect.top;
+        captureDragHome();
 
         // lock element to its visual position before any transform resets
         img.style.transform = 'none';
@@ -490,6 +899,9 @@ function enableCardDrag(img) {
         img.style.top = `${startTop}px`;
         img.style.width = rect.width + 'px';
         img.style.height = rect.height + 'px';
+        if (img.parentNode !== document.body) {
+            document.body.appendChild(img);
+        }
 
         // compute pointer offset relative to element
         offsetX = e.clientX - startLeft;
@@ -597,7 +1009,7 @@ function applyHoloMask(holoOverlay, percentX, clamp) {
 }
 
 function attachMobileInspectPointer(wrapper, reflection, holoOverlay) {
-    const baseTransform = 'perspective(800px) rotateX(0deg) rotateY(0deg)';
+    const baseTransform = 'translateX(-50%) perspective(800px) rotateX(0deg) rotateY(0deg)';
     const clamp = (val, min, max) => Math.min(Math.max(val, min), max);
     wrapper.style.transform = baseTransform;
 
@@ -607,7 +1019,7 @@ function attachMobileInspectPointer(wrapper, reflection, holoOverlay) {
         const centerY = rect.top + rect.height / 2;
         const rotateX = clamp((e.clientY - centerY) / 20, -6, 6);
         const rotateY = clamp((centerX - e.clientX) / 20, -6, 6);
-        wrapper.style.transform = `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+        wrapper.style.transform = `translateX(-50%) perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
 
         const percentX = ((e.clientX - rect.left) / rect.width) * 100;
         const percentY = ((e.clientY - rect.top) / rect.height) * 100;
@@ -637,16 +1049,17 @@ function attachMobileInspectPointer(wrapper, reflection, holoOverlay) {
 }
 
 function attachMobileInspectGyro(wrapper, reflection, holoOverlay) {
-    const baseTransform = 'perspective(800px) rotateX(0deg) rotateY(0deg)';
+    const baseTransform = 'translateX(-50%) perspective(800px) rotateX(0deg) rotateY(0deg)';
     const clamp = (val, min, max) => Math.min(Math.max(val, min), max);
     wrapper.style.transform = baseTransform;
 
     const handleOrientation = (e) => {
-        const beta = clamp(e.beta || 0, -45, 45);   // front-back tilt
+        // Calibrate neutral front-back orientation at beta=30deg.
+        const beta = clamp((e.beta == null ? 30 : e.beta) - 30, -45, 45);   // front-back tilt
         const gamma = clamp(e.gamma || 0, -45, 45); // left-right tilt
         const rotateX = clamp(beta / 3, -10, 10);
         const rotateY = clamp(gamma / 2, -10, 10);
-        wrapper.style.transform = `perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+        wrapper.style.transform = `translateX(-50%) perspective(800px) rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
 
         // Map tilt to a 0-100 range for light hotspot
         const percentX = clamp(((rotateY / 10) + 1) * 50, 0, 100);
@@ -688,6 +1101,7 @@ function closeMobileInspect() {
         mobileInspect.overlay.parentNode.removeChild(mobileInspect.overlay);
     }
     mobileInspect = { overlay: null, cleanup: null };
+    document.body.classList.remove('mobile-inspect-open');
     document.body.style.overflow = '';
 }
 
@@ -695,6 +1109,7 @@ function openMobileInspect(img) {
     const isDesktop = window.matchMedia && window.matchMedia('(min-width: 1024px)').matches;
     if (isDesktop) return;
 
+    closeInfoPanel();
     closeMobileInspect();
 
     const overlay = document.createElement('div');
@@ -705,7 +1120,8 @@ function openMobileInspect(img) {
 
     const closeBtn = document.createElement('button');
     closeBtn.className = 'mobile-inspect-close';
-    closeBtn.textContent = '✕';
+    closeBtn.textContent = '';
+    closeBtn.setAttribute('aria-label', 'Cerrar inspeccion');
     closeBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         closeMobileInspect();
@@ -717,55 +1133,70 @@ function openMobileInspect(img) {
     const clone = img.cloneNode(true);
     clone.removeAttribute('style');
     clone.classList.remove('dragging', 'returning');
+    clone.classList.add('mobile-inspect-clone');
     clone.style.pointerEvents = 'none';
 
     const reflection = document.createElement('div');
     reflection.className = 'card-reflection';
 
-    let holoOverlay = null;
-    if (isHoloCard(clone.dataset.filename || clone.alt || '')) {
-        holoOverlay = document.createElement('div');
-        holoOverlay.className = 'holo-overlay';
-        cardWrap.classList.add('holo');
-    }
+    const holoOverlay = document.createElement('div');
+    holoOverlay.className = 'holo-overlay';
+    cardWrap.classList.add('holo');
 
     cardWrap.appendChild(clone);
     if (holoOverlay) cardWrap.appendChild(holoOverlay);
     cardWrap.appendChild(reflection);
 
+    const infoBox = document.createElement('div');
+    infoBox.className = 'mobile-inspect-info';
+
     const stats = document.createElement('div');
     stats.className = 'mobile-inspect-stats';
+
     const albumEl = document.createElement('p');
-    const winsEl = document.createElement('p');
     const copiesEl = document.createElement('p');
+    const winsEl = document.createElement('p');
     stats.appendChild(albumEl);
-    stats.appendChild(winsEl);
     stats.appendChild(copiesEl);
+    stats.appendChild(winsEl);
+
+    const desc = document.createElement('p');
+    desc.className = 'mobile-inspect-description';
+    desc.textContent = '';
 
     const info = getCardInfoFromImg(img);
+    let albumText = '';
+    let copiesText = '';
+    let winsText = '';
     if (info.group && info.num != null) {
         const record = (collection[info.group] && collection[info.group][info.num]) || { quantity: 0, wins: 0 };
-        albumEl.textContent = `Número de álbum: ${String(info.num).padStart(2, '0')}`;
-        winsEl.textContent = `Victorias: ${record.wins || 0}`;
-        copiesEl.textContent = `Copias: ${record.quantity || 0}`;
-    } else {
-        albumEl.textContent = '';
-        winsEl.textContent = '';
-        copiesEl.textContent = '';
+        albumText = `N.Álbum ${info.num}`;
+        copiesText = `N.Copias ${record.quantity || 0}`;
+        winsText = `N.Victorias ${record.wins || 0}`;
     }
 
-    panel.appendChild(closeBtn);
+    infoBox.appendChild(stats);
+    infoBox.appendChild(desc);
+
     panel.appendChild(cardWrap);
-    panel.appendChild(stats);
+    panel.appendChild(infoBox);
+    panel.appendChild(closeBtn);
     overlay.appendChild(panel);
 
     let cleanupEffects = attachMobileInspectPointer(cardWrap, reflection, holoOverlay);
 
-    overlay.addEventListener('click', () => closeMobileInspect());
     panel.addEventListener('click', (e) => e.stopPropagation());
 
+    document.body.classList.add('mobile-inspect-open');
     document.body.style.overflow = 'hidden';
     document.body.appendChild(overlay);
+
+    const filename = (clone.dataset.filename || clone.alt || img.dataset.filename || img.alt || '');
+    const descriptionText = CARD_DESCRIPTIONS[filename] || '';
+    typewriterEl(albumEl, albumText, 600);
+    typewriterEl(copiesEl, copiesText, 600);
+    typewriterEl(winsEl, winsText, 600);
+    typewriterEl(desc, descriptionText, 900);
 
     // Try to switch to gyro-based tilt if available
     requestGyroPermission().then(granted => {
@@ -796,6 +1227,7 @@ function openMobileInspect(img) {
 
 // envelope state machine -------------------------------------------------
 let envelopeState = 'idle';
+let closeInfoPanel = () => {};
 const displayState = {
     card: null,
     originalParent: null,
@@ -804,11 +1236,37 @@ const displayState = {
     reflection: null,
     cleanup: null
 };
+const bottomDrawerState = {
+    isOpen: false
+};
+const leftDrawerState = {
+    isOpen: false
+};
+const rightDrawerState = {
+    isOpen: false
+};
 
 // battle arena globals ----------------------------------------------------
 let battleActive = false;
 let isFighting = false;
 let cooldownInterval = null;
+
+function clearBattleSlots() {
+    const zone = document.getElementById('battle-zone');
+    if (!zone) return;
+
+    zone.querySelectorAll('.battle-slot').forEach(slot => {
+        Array.from(slot.children).forEach(child => {
+            if (child.classList && child.classList.contains('dash-border')) return;
+            child.remove();
+        });
+        slot.classList.remove('battle-attack', 'battle-shake', 'battle-jump', 'battle-lose');
+    });
+
+    const txt = zone.querySelector('.fight-text');
+    if (txt) txt.classList.remove('show');
+}
+
 const battleController = {
     leftImg: null,
     rightImg: null,
@@ -842,10 +1300,7 @@ const battleController = {
         this.resetBattle();
     },
     resetBattle() {
-        const zone = document.getElementById('battle-zone');
-        zone.querySelectorAll('.battle-slot').forEach(slot => {
-            slot.innerHTML = '';
-        });
+        clearBattleSlots();
         this.leftImg = null;
         this.rightImg = null;
         isFighting = false;
@@ -914,6 +1369,13 @@ function pointInRect(x, y, rect) {
     return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
 }
 
+function findAlbumHomeForCard(card) {
+    if (!card) return null;
+    const info = getCardInfoFromImg(card);
+    if (!info.group || info.num == null) return null;
+    return document.querySelector(`.card-slot[data-group="${info.group}"][data-slot="${info.num}"]`) || null;
+}
+
 function tryPlaceInDisplayZone(img, x, y) {
     if (!window.matchMedia || !window.matchMedia('(min-width: 1024px)').matches) return false;
     const zone = document.getElementById('display-zone');
@@ -927,8 +1389,13 @@ function tryPlaceInDisplayZone(img, x, y) {
         closeDisplayZone();
     }
 
-    displayState.originalParent = img.parentNode;
-    displayState.originalNextSibling = img.nextSibling;
+    const homeFromDrag = img._dragHomeParent || null;
+    const fallbackAlbumHome = findAlbumHomeForCard(img);
+    const fallbackParentNode = (img.parentNode && img.parentNode !== document.body) ? img.parentNode : null;
+    displayState.originalParent = homeFromDrag || fallbackAlbumHome || fallbackParentNode;
+    displayState.originalNextSibling = img._dragHomeNextSibling || img.nextSibling;
+    img._dragHomeParent = null;
+    img._dragHomeNextSibling = null;
     displayState.card = img;
 
     if (img.parentNode) {
@@ -942,13 +1409,16 @@ function tryPlaceInDisplayZone(img, x, y) {
     reflection.className = 'card-reflection';
     wrapper.appendChild(img);
     const isDesktop = window.matchMedia && window.matchMedia('(min-width: 1024px)').matches;
-    if (isDesktop && isHoloCard(img.dataset.filename)) {
+    if (isDesktop) {
         const overlay = document.createElement('div');
         overlay.className = 'holo-overlay';
         wrapper.classList.add('holo');
         wrapper.appendChild(overlay);
     }
     wrapper.appendChild(reflection);
+    const drawCanvas = document.createElement('canvas');
+    drawCanvas.className = 'display-draw-layer';
+    wrapper.appendChild(drawCanvas);
     container.appendChild(wrapper);
 
     setupDisplayCardEffects(wrapper, reflection);
@@ -970,6 +1440,7 @@ function tryPlaceInDisplayZone(img, x, y) {
 
     zone.classList.add('active', 'visible');
     zone.classList.add('has-card');
+    closeInfoPanel();
     updateDisplayStatsFromImage(img);
     return true;
 }
@@ -977,6 +1448,7 @@ function tryPlaceInDisplayZone(img, x, y) {
 function tryPlaceInBattleZone(img, x, y) {
     const leftSlot = document.querySelector('#battle-zone .battle-slot.left');
     const rightSlot = document.querySelector('#battle-zone .battle-slot.right');
+    const battleToggle = document.getElementById('battle-drawer-toggle');
     const leftRect = leftSlot.getBoundingClientRect();
     const rightRect = rightSlot.getBoundingClientRect();
 
@@ -989,6 +1461,8 @@ function tryPlaceInBattleZone(img, x, y) {
         clone.style.position = 'relative';
         leftSlot.appendChild(clone);
         battleController.leftImg = clone;
+        if (battleToggle) battleToggle.checked = true;
+        closeInfoPanel();
         checkBattleStart();
         return true;
     }
@@ -1000,6 +1474,8 @@ function tryPlaceInBattleZone(img, x, y) {
         clone.style.position = 'relative';
         rightSlot.appendChild(clone);
         battleController.rightImg = clone;
+        if (battleToggle) battleToggle.checked = true;
+        closeInfoPanel();
         checkBattleStart();
         return true;
     }
@@ -1046,17 +1522,14 @@ function setupEnvelope() {
 function updateEnvelopeVisibilityForAlbum() {
     const container = document.querySelector('.envelope-container');
     const envelope = document.getElementById('envelope');
-    const battleZone = document.getElementById('battle-zone');
     const anyOpen = !!document.querySelector('.group.open');
     if (!container || !envelope) return;
     if (anyOpen) {
         container.classList.add('hidden-during-album');
         envelope.style.pointerEvents = 'none';
-        if (battleZone) battleZone.classList.remove('hidden-when-closed');
     } else {
         container.classList.remove('hidden-during-album');
         updateEnvelopeState();
-        if (battleZone) battleZone.classList.add('hidden-when-closed');
     }
 }
 
@@ -1079,8 +1552,9 @@ function closeDisplayZone() {
         displayState.cleanup();
         displayState.cleanup = null;
     }
-    if (displayState.card && displayState.originalParent) {
+    if (displayState.card) {
         const card = displayState.card;
+        const restoreParent = displayState.originalParent || findAlbumHomeForCard(card);
         card.dataset.displayLocked = '';
         card.style.pointerEvents = '';
         card.style.position = '';
@@ -1092,7 +1566,13 @@ function closeDisplayZone() {
         card.style.zIndex = '';
         card.style.transform = '';
         card.style.boxShadow = '';
-        displayState.originalParent.insertBefore(card, displayState.originalNextSibling);
+        if (restoreParent) {
+            if (displayState.originalNextSibling && displayState.originalNextSibling.parentNode === restoreParent) {
+                restoreParent.insertBefore(card, displayState.originalNextSibling);
+            } else {
+                restoreParent.appendChild(card);
+            }
+        }
     }
     if (container) container.innerHTML = '';
     displayState.card = null;
@@ -1111,9 +1591,7 @@ function closeDisplayZone() {
 function updateDisplayZoneVisibility() {
     const zone = document.getElementById('display-zone');
     if (!zone) return;
-    const isDesktop = window.matchMedia && window.matchMedia('(min-width: 1024px)').matches;
-    const anyOpen = !!document.querySelector('.group.open');
-    if (!isDesktop || !anyOpen) {
+    if (!rightDrawerState.isOpen) {
         closeDisplayZone();
         zone.classList.remove('visible');
         return;
@@ -1136,54 +1614,137 @@ function isCooldownActive() {
 
 function setupInfoOverlay() {
     const trigger = document.querySelector('.info-trigger');
-    const overlay = document.getElementById('info-overlay');
-    if (!trigger || !overlay) return;
+    const panel = document.getElementById('info-panel');
+    const infoMain = panel ? panel.querySelector('.info-main') : null;
+    const infoMetaLeft = panel ? panel.querySelector('.info-meta-left') : null;
+    const infoMetaRight = panel ? panel.querySelector('.info-meta-right') : null;
+    if (!trigger || !panel || !infoMain || !infoMetaLeft || !infoMetaRight) return;
+
+    const infoFullText = infoMain.dataset.fullText || '';
+    const infoMetaLeftText = infoMetaLeft.dataset.fullText || '';
+    const infoMetaRightText = infoMetaRight.dataset.fullText || '';
+    let typeRaf = null;
+    const isMobileViewport = () => window.matchMedia && window.matchMedia('(max-width: 1024px)').matches;
+
+    const escapeHtml = (str) => str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/\"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+    const renderPlain = (el, fullText, count) => {
+        el.textContent = fullText.slice(0, count);
+    };
+
+    const renderMeta = (el, fullText, count) => {
+        const parts = fullText.split('\n');
+        const label = parts[0] || '';
+        const labelCount = Math.min(count, label.length);
+        const labelHtml = `<span class="info-meta-label">${escapeHtml(label.slice(0, labelCount))}</span>`;
+
+        if (count <= label.length) {
+            el.innerHTML = labelHtml;
+            return;
+        }
+
+        const restCount = count - label.length;
+        const restRaw = fullText.slice(label.length, label.length + restCount);
+        const restHtml = escapeHtml(restRaw).replace(/\n/g, '<br>');
+        el.innerHTML = `${labelHtml}${restHtml}`;
+    };
+
+    const stopTypewriter = () => {
+        if (typeRaf) {
+            cancelAnimationFrame(typeRaf);
+            typeRaf = null;
+        }
+        infoMain.classList.remove('typing');
+    };
+
+    const playTypewriter = () => {
+        stopTypewriter();
+        renderPlain(infoMain, infoFullText, 0);
+        renderMeta(infoMetaLeft, infoMetaLeftText, 0);
+        renderMeta(infoMetaRight, infoMetaRightText, 0);
+        infoMain.classList.add('typing');
+
+        const segments = [
+            { el: infoMain, text: infoFullText, render: renderPlain },
+            { el: infoMetaLeft, text: infoMetaLeftText, render: renderMeta },
+            { el: infoMetaRight, text: infoMetaRightText, render: renderMeta }
+        ];
+        const totalChars = segments.reduce((sum, s) => sum + s.text.length, 0);
+        const duration = 800;
+        const start = performance.now();
+
+        const frame = (now) => {
+            const progress = Math.min(1, (now - start) / duration);
+            let remaining = Math.floor(totalChars * progress);
+
+            segments.forEach(seg => {
+                const take = Math.max(0, Math.min(seg.text.length, remaining));
+                seg.render(seg.el, seg.text, take);
+                remaining -= take;
+            });
+
+            if (progress < 1) {
+                typeRaf = requestAnimationFrame(frame);
+            } else {
+                stopTypewriter();
+            }
+        };
+
+        typeRaf = requestAnimationFrame(frame);
+    };
+
+    const isAnyDrawerOpen = () => {
+        return !!document.querySelector(
+            '#battle-drawer-toggle:checked, #inspect-drawer-toggle:checked, #battle-zone .battle-slot img, #display-zone.has-card'
+        );
+    };
 
     const open = () => {
-        overlay.classList.add('visible');
-        document.body.style.overflow = 'hidden';
+        panel.classList.add('visible');
+        trigger.classList.add('open');
+        panel.setAttribute('aria-hidden', 'false');
+        if (isMobileViewport()) document.body.classList.add('mobile-info-open');
+        playTypewriter();
     };
 
     const close = () => {
-        overlay.classList.remove('visible');
-        document.body.style.overflow = '';
+        panel.classList.remove('visible');
+        trigger.classList.remove('open');
+        panel.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('mobile-info-open');
+        stopTypewriter();
     };
 
-    trigger.addEventListener('click', open);
-    overlay.addEventListener('click', (e) => {
-        if (e.target === overlay) close();
+    closeInfoPanel = close;
+
+    trigger.addEventListener('click', () => {
+        if (!panel.classList.contains('visible') && isAnyDrawerOpen()) {
+            return;
+        }
+        if (panel.classList.contains('visible')) {
+            close();
+        } else {
+            open();
+        }
     });
 
-    const resetBtn = overlay.querySelector('.info-reset');
-    const confirmBox = overlay.querySelector('.info-reset-confirm');
-    const acceptBtn = overlay.querySelector('.info-reset-accept');
-    const cancelBtn = overlay.querySelector('.info-reset-cancel');
-    const hideConfirm = () => {
-        if (confirmBox) confirmBox.classList.remove('visible');
-    };
+    const battleToggle = document.getElementById('battle-drawer-toggle');
+    const inspectToggle = document.getElementById('inspect-drawer-toggle');
+    [battleToggle, inspectToggle].forEach(toggle => {
+        if (!toggle) return;
+        toggle.addEventListener('change', () => {
+            if (toggle.checked) close();
+        });
+    });
 
-    if (resetBtn && confirmBox) {
-        resetBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            confirmBox.classList.toggle('visible');
-        });
-    }
-    if (cancelBtn) {
-        cancelBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            hideConfirm();
-        });
-    }
-    if (acceptBtn) {
-        acceptBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            resetCollection();
-            hideConfirm();
-        });
-    }
-
-    // Auto-open info on first load for all devices; users can still toggle with the info icon
-    open();
+    window.addEventListener('resize', () => {
+        if (!isMobileViewport()) document.body.classList.remove('mobile-info-open');
+    });
 }
 
 function showEnvelopeNow() {
@@ -1209,6 +1770,73 @@ function setupDisplayCardEffects(wrapper, reflection) {
     wrapper.style.transform = baseTransform;
 
     const holoOverlay = wrapper.querySelector('.holo-overlay');
+    const depthTopLayer = wrapper.querySelector('.depth-top');
+    const drawCanvas = wrapper.querySelector('.display-draw-layer');
+    const drawCtx = drawCanvas ? drawCanvas.getContext('2d') : null;
+    let brushEnabled = false;
+    let hasDrawPoint = false;
+    let lastDrawX = 0;
+    let lastDrawY = 0;
+
+    const resizeDrawLayer = () => {
+        if (!drawCanvas || !drawCtx) return;
+        const rect = wrapper.getBoundingClientRect();
+        const width = Math.max(1, Math.round(rect.width));
+        const height = Math.max(1, Math.round(rect.height));
+        const dpr = Math.max(1, window.devicePixelRatio || 1);
+        const targetWidth = Math.round(width * dpr);
+        const targetHeight = Math.round(height * dpr);
+
+        if (drawCanvas.width === targetWidth && drawCanvas.height === targetHeight) {
+            return;
+        }
+
+        const snapshot = document.createElement('canvas');
+        snapshot.width = drawCanvas.width;
+        snapshot.height = drawCanvas.height;
+        const snapshotCtx = snapshot.getContext('2d');
+        if (snapshotCtx && snapshot.width > 0 && snapshot.height > 0) {
+            snapshotCtx.drawImage(drawCanvas, 0, 0);
+        }
+
+        drawCanvas.width = targetWidth;
+        drawCanvas.height = targetHeight;
+        drawCanvas.style.width = width + 'px';
+        drawCanvas.style.height = height + 'px';
+
+        drawCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawCtx.lineCap = 'round';
+        drawCtx.lineJoin = 'round';
+        drawCtx.strokeStyle = '#000000';
+        drawCtx.lineWidth = 4;
+
+        if (snapshot.width > 0 && snapshot.height > 0) {
+            drawCtx.drawImage(snapshot, 0, 0, width, height);
+        }
+    };
+
+    const getDrawPoint = (e) => {
+        if (!drawCanvas) return { x: 0, y: 0 };
+        const rect = drawCanvas.getBoundingClientRect();
+        const x = clamp(e.clientX - rect.left, 0, rect.width);
+        const y = clamp(e.clientY - rect.top, 0, rect.height);
+        return { x, y };
+    };
+
+    const handleToggleBrush = (e) => {
+        if (e.button !== 0 || !drawCtx) return;
+        brushEnabled = !brushEnabled;
+        wrapper.classList.toggle('draw-enabled', brushEnabled);
+        if (!brushEnabled) {
+            hasDrawPoint = false;
+            drawCtx.beginPath();
+            return;
+        }
+        const point = getDrawPoint(e);
+        lastDrawX = point.x;
+        lastDrawY = point.y;
+        hasDrawPoint = true;
+    };
 
     const handleMove = (e) => {
         const rect = wrapper.getBoundingClientRect();
@@ -1232,15 +1860,43 @@ function setupDisplayCardEffects(wrapper, reflection) {
             holoOverlay.style.maskImage = gradient;
             holoOverlay.style.webkitMaskImage = gradient;
         }
+
+        if (depthTopLayer) {
+            const parallaxX = ((percentX - 50) / 50) * 8;
+            const parallaxY = ((percentY - 50) / 50) * 8;
+            const layerRotateX = rotateX * 0.55;
+            const layerRotateY = rotateY * 0.55;
+            depthTopLayer.style.transform = `translateZ(30px) rotateX(${layerRotateX}deg) rotateY(${layerRotateY}deg) translate3d(${parallaxX}px, ${parallaxY}px, 0)`;
+        }
+
+        if (brushEnabled && drawCtx) {
+            const point = getDrawPoint(e);
+            if (!hasDrawPoint) {
+                lastDrawX = point.x;
+                lastDrawY = point.y;
+                hasDrawPoint = true;
+                return;
+            }
+            drawCtx.beginPath();
+            drawCtx.moveTo(lastDrawX, lastDrawY);
+            drawCtx.lineTo(point.x, point.y);
+            drawCtx.stroke();
+            lastDrawX = point.x;
+            lastDrawY = point.y;
+        }
     };
 
     const handleLeave = () => {
         wrapper.style.transform = baseTransform;
         wrapper.classList.remove('active');
+        hasDrawPoint = false;
         if (holoOverlay) {
             holoOverlay.style.opacity = '0';
             holoOverlay.style.maskImage = 'none';
             holoOverlay.style.webkitMaskImage = 'none';
+        }
+        if (depthTopLayer) {
+            depthTopLayer.style.transform = 'translateZ(30px)';
         }
     };
 
@@ -1248,14 +1904,41 @@ function setupDisplayCardEffects(wrapper, reflection) {
         wrapper.classList.remove('enter');
     };
 
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => resizeDrawLayer())
+        : null;
+
+    resizeDrawLayer();
+    if (resizeObserver) resizeObserver.observe(wrapper);
+
     wrapper.addEventListener('mousemove', handleMove);
     wrapper.addEventListener('mouseleave', handleLeave);
+    wrapper.addEventListener('mousedown', handleToggleBrush);
     wrapper.addEventListener('animationend', handleAnimEnd, { once: true });
 
     displayState.cleanup = () => {
         wrapper.removeEventListener('mousemove', handleMove);
         wrapper.removeEventListener('mouseleave', handleLeave);
+        wrapper.removeEventListener('mousedown', handleToggleBrush);
+        if (resizeObserver) resizeObserver.disconnect();
     };
+}
+
+function typewriterEl(el, text, duration) {
+    if (el._typeRaf) cancelAnimationFrame(el._typeRaf);
+    el.textContent = '';
+    if (!text) return;
+    const start = performance.now();
+    const frame = (now) => {
+        const count = Math.min(text.length, Math.floor(text.length * Math.min(1, (now - start) / duration)));
+        el.textContent = text.slice(0, count);
+        if (count < text.length) {
+            el._typeRaf = requestAnimationFrame(frame);
+        } else {
+            el._typeRaf = null;
+        }
+    };
+    el._typeRaf = requestAnimationFrame(frame);
 }
 
 function updateDisplayStatsFromImage(img) {
@@ -1275,19 +1958,26 @@ function updateDisplayStatsFromImage(img) {
     }
 
     const record = (collection[info.group] && collection[info.group][info.num]) || { quantity: 0, wins: 0 };
-    const albumNumber = String(info.num).padStart(2, '0');
-    albumEl.textContent = `Número de álbum: ${albumNumber}`;
-    winsEl.textContent = `Victorias: ${record.wins || 0}`;
-    copiesEl.textContent = `Copias: ${record.quantity || 0}`;
+    const albumNumber = info.num;
+    typewriterEl(albumEl,  `N.Álbum ${albumNumber}`,   600);
+    typewriterEl(copiesEl, `N.Copias ${record.quantity || 0}`, 600);
+    typewriterEl(winsEl,   `N.Victorias ${record.wins || 0}`,  600);
+
+    const descEl = zone.querySelector('.card-description');
+    if (descEl) {
+        const filename = img.dataset.filename || img.alt || '';
+        const desc = CARD_DESCRIPTIONS[filename] || '';
+        typewriterEl(descEl, desc, 900);
+    }
 }
 
 function clearDisplayStats() {
     const zone = document.getElementById('display-zone');
     if (!zone) return;
     const fields = zone.querySelectorAll('.stat-album, .stat-wins, .stat-copies');
-    fields.forEach(el => {
-        el.textContent = '';
-    });
+    fields.forEach(el => { el.textContent = ''; });
+    const descEl = zone.querySelector('.card-description');
+    if (descEl) descEl.textContent = '';
 }
 
 function recordBattleWinFromImage(img) {
@@ -1298,9 +1988,68 @@ function recordBattleWinFromImage(img) {
     saveCollection();
 }
 
+function updateConseguirFichasBtnState() {
+    const btn = document.querySelector('.conseguir-fichas-btn');
+    if (!btn) return;
+    const canOpen = !isCooldownActive() && hasRemainingCards();
+    btn.disabled = !canOpen;
+    btn.style.opacity = canOpen ? '1' : '0.4';
+    btn.style.cursor = canOpen ? 'pointer' : 'not-allowed';
+    if (canOpen) {
+        btn.textContent = 'Conseguir fichas';
+        btn.classList.remove('counting-down');
+    } else if (isCooldownActive()) {
+        const remaining = Math.max(0, Number(localStorage.getItem('nextPackTime')) - Date.now());
+        const totalSeconds = Math.ceil(remaining / 1000);
+        const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+        const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
+        const seconds = String(totalSeconds % 60).padStart(2, '0');
+        btn.textContent = `${hours}/${minutes}/${seconds}`;
+        btn.classList.add('counting-down');
+    }
+}
+
+function setupConseguirFichasBtn() {
+    const btn = document.querySelector('.conseguir-fichas-btn');
+    if (!btn) return;
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isCooldownActive() || !hasRemainingCards()) return;
+        playSound(conseguirFichasSound);
+        // Close bottom drawer first, then open pack after the click event fully resolves
+        bottomDrawerState.isOpen = false;
+        const panel = document.getElementById('bottom-drawer-panel');
+        const control = document.querySelector('.open-pack-text-bottom');
+        const battleZone = document.getElementById('battle-zone');
+        if (panel) {
+            panel.classList.remove('is-open');
+            panel.setAttribute('aria-hidden', 'true');
+        }
+        if (control) {
+            control.classList.remove('is-open');
+            control.setAttribute('aria-expanded', 'false');
+            const lbl = control.querySelector('.open-pack-label');
+            const plus = control.querySelector('.open-pack-plus');
+            if (lbl) lbl.textContent = 'ABRIR';
+            if (plus) plus.textContent = '+';
+        }
+        if (battleZone) {
+            battleZone.classList.remove('mobile-bottom-visible');
+        }
+        updateConseguirFichasBtnState();
+        // Defer by one tick so pointer/click events from this interaction don't bleed into the overlay
+        setTimeout(() => {
+            openEnvelope();
+            startCooldown();
+        }, 50);
+    });
+    updateConseguirFichasBtnState();
+}
+
 function updateEnvelopeState() {
     const envelope = document.getElementById('envelope');
     const { note, timer } = getCooldownElements();
+    updateConseguirFichasBtnState();
     if (!envelope) return;
 
     if (isCooldownActive()) {
@@ -1395,9 +2144,11 @@ function startCooldown(existingTime) {
             return;
         }
         const totalSeconds = Math.ceil(remaining / 1000);
-        const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+        const hours = String(Math.floor(totalSeconds / 3600)).padStart(2, '0');
+        const minutes = String(Math.floor((totalSeconds % 3600) / 60)).padStart(2, '0');
         const seconds = String(totalSeconds % 60).padStart(2, '0');
-        timer.textContent = `más amigos en ${minutes}:${seconds}`;
+        timer.textContent = `Nuevo sobre en (${hours}/${minutes}/${seconds})`;
+        updateConseguirFichasBtnState();
     };
 
     updateCountdown();
@@ -1415,15 +2166,14 @@ function resumePackCooldown() {
 }
 
 // pack reveal logic ------------------------------------------------------
-// overlay shows a stacked deck; click top card to reveal sequentially
+// overlay shows a stacked deck; click anywhere to reveal next card
 function showPackOverlay(filenames) {
     const overlay = document.createElement('div');
     overlay.className = 'overlay stack-overlay';
 
     const stack = document.createElement('div');
     stack.className = 'card-stack stack-enter';
-
-    stack.style.touchAction = 'manipulation'; // reduce touch delays and let taps fire fast
+    stack.style.touchAction = 'manipulation';
 
     filenames.forEach((name, index) => {
         const depth = filenames.length - 1 - index;
@@ -1431,15 +2181,11 @@ function showPackOverlay(filenames) {
         const scale = 1 - depth * 0.02;
         const { node, img } = createCardElement(name, 'pack-card-wrapper', { wrapNonHolo: true, allowHolo: false });
         img.classList.add('stack-card');
-        console.log('Loading card from:', img.src);
         img.dataset.cardName = name;
         const baseTransform = `translate(-50%, -50%) translateY(${offsetY}px) scale(${scale})`;
         node.dataset.baseTransform = baseTransform;
         node.style.transform = baseTransform;
         node.style.zIndex = String(200 + index);
-        if (isFirstCopy(name)) {
-            node.dataset.firstCopy = 'true';
-        }
         stack.appendChild(node);
     });
 
@@ -1449,112 +2195,72 @@ function showPackOverlay(filenames) {
     const closeOverlay = () => {
         overlay.classList.remove('visible');
         setTimeout(() => {
-            if (overlay.parentNode) {
-                overlay.parentNode.removeChild(overlay);
-            }
+            if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
             returnEnvelope();
         }, 300);
     };
 
-    const revealNext = () => {
+    const showBadgeForTopCard = () => {
+        const topCard = stack.lastElementChild;
+        if (!topCard) return;
+        const img = topCard.querySelector('img');
+        const cardName = img ? img.dataset.cardName || img.alt : topCard.dataset.cardName;
+        if (isFirstCopy(cardName) && !topCard.querySelector('.new-badge')) {
+            const badge = document.createElement('div');
+            badge.className = 'new-badge';
+            badge.textContent = '¡Nueva!';
+            const sparklesMask = document.createElement('div');
+            sparklesMask.className = 'new-sparkles-mask';
+            const sparkles = document.createElement('div');
+            sparkles.className = 'new-sparkles';
+            sparklesMask.appendChild(sparkles);
+            topCard.appendChild(badge);
+            topCard.appendChild(sparklesMask);
+            triggerSparkleOverlay();
+        }
+    };
+
+    // Single overlay-level listener — no per-card event juggling needed
+    let advanceLocked = false;
+    const advanceStack = () => {
+        if (advanceLocked) return;
         const topCard = stack.lastElementChild;
         if (!topCard) {
             closeOverlay();
             return;
         }
+        advanceLocked = true;
 
-            // Prepare badge/sparkles as soon as the card queda en primer plano
-            const img = topCard.querySelector('img');
-            const cardName = img ? img.dataset.cardName || img.alt : topCard.dataset.cardName;
-            const firstCopy = isFirstCopy(cardName);
-            if (firstCopy && !topCard.querySelector('.new-badge')) {
-                const badge = document.createElement('div');
-                badge.className = 'new-badge';
-                badge.textContent = '¡Nueva!';
-                const sparklesMask = document.createElement('div');
-                sparklesMask.className = 'new-sparkles-mask';
-                const sparkles = document.createElement('div');
-                sparkles.className = 'new-sparkles';
-                sparklesMask.appendChild(sparkles);
-                topCard.appendChild(badge);
-                topCard.appendChild(sparklesMask);
-                triggerSparkleOverlay();
-            }
+        const img = topCard.querySelector('img');
+        const cardName = img ? img.dataset.cardName || img.alt : topCard.dataset.cardName;
 
-        let revealed = false;
-        const triggerReveal = (e) => {
-            if (revealed) return;
-            if (e) e.preventDefault();
-            revealed = true;
-            detachHandlers();
-            handleReveal();
-        };
+        playSound(cardRevealSound);
+        topCard.classList.add('stack-card-revealing');
+        topCard.style.transform = `${topCard.dataset.baseTransform} translateX(300px) rotate(8deg)`;
+        topCard.style.opacity = '0';
 
-        Array.from(stack.children).forEach(card => {
-            card.style.pointerEvents = card === topCard ? 'auto' : 'none';
-        });
-
-        const handleReveal = () => {
-            playSound(cardRevealSound);
-            topCard.classList.add('stack-card-revealing');
-            topCard.style.transform = `${topCard.dataset.baseTransform} translateX(300px) rotate(8deg)`;
-            topCard.style.opacity = '0';
-
-            const img = topCard.querySelector('img');
-            const cardName = img ? img.dataset.cardName || img.alt : topCard.dataset.cardName;
-            const firstCopy = isFirstCopy(cardName);
-
-            let finished = false;
-            const finish = () => {
-                if (finished) return;
-                finished = true;
-                addCard(cardName);
-                if (topCard.parentNode === stack) {
-                    stack.removeChild(topCard);
-                }
-                revealNext();
-            };
-
-            // Transition end normally advances the stack
-            topCard.addEventListener('transitionend', finish, { once: true });
-            // Fallback in case the transitionend doesn't fire on some mobile browsers
-            setTimeout(finish, 700);
-        };
-
-        const detachHandlers = () => {
-            topCard.removeEventListener('click', clickHandler);
-            topCard.removeEventListener('pointerup', pointerUpHandler);
-            const img = topCard.querySelector('img');
-            if (img) {
-                img.removeEventListener('click', clickHandler);
-                img.removeEventListener('pointerup', pointerUpHandler);
+        let finished = false;
+        const finish = () => {
+            if (finished) return;
+            finished = true;
+            addCard(cardName);
+            if (topCard.parentNode === stack) stack.removeChild(topCard);
+            advanceLocked = false;
+            if (stack.lastElementChild) {
+                showBadgeForTopCard();
+            } else {
+                closeOverlay();
             }
         };
 
-        const clickHandler = () => {
-            triggerReveal();
-        };
-
-        const pointerUpHandler = (e) => {
-            triggerReveal(e);
-        };
-
-        topCard.addEventListener('click', clickHandler);
-        topCard.addEventListener('pointerup', pointerUpHandler);
-        const topImg = topCard.querySelector('img');
-        if (topImg) {
-            topImg.addEventListener('click', clickHandler);
-            topImg.addEventListener('pointerup', pointerUpHandler);
-        }
+        topCard.addEventListener('transitionend', finish, { once: true });
+        setTimeout(finish, 700);
     };
 
-    // trigger fade-in animation
-    requestAnimationFrame(() => overlay.classList.add('visible'));
+    overlay.addEventListener('click', advanceStack);
 
-    // small delay so cards feel like they emerge more gradually from the envelope
-    setTimeout(() => {
-        revealNext();
-    }, 350);
+    requestAnimationFrame(() => overlay.classList.add('visible'));
+    setTimeout(showBadgeForTopCard, 350);
 }
 
 
@@ -1593,7 +2299,7 @@ function returnEnvelope() {
 function openEnvelope() {
     // allow duplicates: draw from all available cards
     const shuffled = shuffleArray([...allAvailableCards]);
-    const picked = shuffled.slice(0, 5);
+    const picked = shuffled.slice(0, 3);
     showPackOverlay(picked);
 }
 
@@ -1613,13 +2319,18 @@ function renderCollectionToDom() {
 function resetCollection() {
     // clear state
     Object.keys(collection).forEach(group => { collection[group] = {}; });
+    Object.keys(newAlbumBadges).forEach(group => { delete newAlbumBadges[group]; });
+    Object.keys(newSlotBadges).forEach(key => { delete newSlotBadges[key]; });
     localStorage.removeItem('collection');
+    localStorage.removeItem(NEW_ALBUM_BADGES_KEY);
+    localStorage.removeItem(NEW_SLOT_BADGES_KEY);
     localStorage.removeItem('nextPackTime');
 
     // clear UI slots
     document.querySelectorAll('.card-slot').forEach(slot => {
         slot.innerHTML = '';
         slot.classList.remove('has-card');
+        slot.classList.remove('is-new');
     });
 
     // close display zone if any card is shown
@@ -1627,18 +2338,13 @@ function resetCollection() {
 
     // reset counters and envelope state
     updateAllCounters();
+    applyAllAlbumNewBadges();
+    applyAllSlotNewBadges();
     showEnvelopeNow();
     updateEnvelopeState();
 
     // clear battle zone
-    const battleZone = document.getElementById('battle-zone');
-    if (battleZone) {
-        battleZone.querySelectorAll('.battle-slot').forEach(slot => slot.innerHTML = '');
-        battleController.leftImg = null;
-        battleController.rightImg = null;
-        isFighting = false;
-        battleActive = false;
-    }
+    battleController.resetBattle();
 }
 
 function saveCollection() {
