@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cards Album</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-layout">
+        <main class="album-area" id="accordion"></main>
+
+        <aside class="inspect-panel display-zone drawer-container drawer-inspect" id="display-zone">
+            <input id="inspect-drawer-toggle" class="drawer-toggle" type="checkbox" aria-label="Abrir cajon de inspeccion">
+            <div class="drawer-body">
+                <label for="inspect-drawer-toggle" class="drawer-handle" aria-hidden="true"></label>
+                <div class="drawer-content">
+                    <div class="inspect-slot">
+                        <svg class="dash-border" viewBox="0 0 454 679" aria-hidden="true" focusable="false">
+                            <rect x="1" y="1" width="452" height="677" rx="16" ry="16" fill="none" stroke="rgba(0,0,0,0.2)" stroke-width="2" stroke-dasharray="7 7"></rect>
+                        </svg>
+                        <div class="display-card-container">
+                            <div class="display-placeholder">Arrastra una carta para inspeccionar</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="inspect-info">
+                <div class="inspect-stats display-stats">
+                    <div class="stat-album"></div>
+                    <div class="stat-copies"></div>
+                    <div class="stat-wins"></div>
+                </div>
+                <button class="inspect-close display-close" aria-label="Close display">X</button>
+                <div class="card-description"></div>
+            </div>
+        </aside>
+    </div>
+
+    <div class="envelope-container">
+        <img id="envelope" class="envelope" src="images/envelope-closed.gif" alt="Envelope">
+        <div class="cooldown-timer" style="display:none;"></div>
+    </div>
+
+    <div class="open-pack-text open-pack-text-side" role="button" tabindex="0" aria-label="Abrir cajonera izquierda" aria-expanded="false" aria-controls="left-drawer-panel">
+        <div class="open-pack-plus">+</div>
+        <div class="open-pack-label">ABRIR</div>
+    </div>
+
+    <div class="open-pack-text open-pack-text-bottom" role="button" tabindex="0" aria-label="Abrir cajonera inferior" aria-expanded="false" aria-controls="bottom-drawer-panel">
+        <div class="open-pack-plus">+</div>
+        <div class="open-pack-label">ABRIR</div>
+    </div>
+
+    <div class="open-pack-text open-pack-text-right" role="button" tabindex="0" aria-label="Abrir cajonera derecha" aria-expanded="false" aria-controls="right-drawer-panel">
+        <div class="open-pack-plus">+</div>
+        <div class="open-pack-label">ABRIR</div>
+    </div>
+
+    <div id="bottom-drawer-panel" class="bottom-drawer-panel" aria-hidden="true">
+        <button class="conseguir-fichas-btn" type="button">Conseguir fichas</button>
+    </div>
+    <div id="left-drawer-panel" class="left-drawer-panel" aria-hidden="true"></div>
+    <div id="right-drawer-panel" class="right-drawer-panel" aria-hidden="true"></div>
+
+    <div id="battle-zone" class="battle-zone">
+        <div class="battle-slot left"></div>
+        <div class="battle-slot right"></div>
+        <div class="fight-text">FIGHT</div>
+    </div>
+
+    <button class="info-trigger" aria-label="Abrir información" title="Información">i</button>
+
+    <div class="info-panel" id="info-panel" aria-hidden="true">
+        <div class="info-main" data-full-text="Hola, Bienvenido/a a Amigopedia.
+    Este es un archivo digital donde puedes registrar fichas de mis amigos.
+    Cada persona aparece como una ficha dentro del sistema.
+    Quién sabe… quizá algún día tú también formes parte del archivo."></div>
+        <div class="info-meta">
+            <div class="info-meta-left" data-full-text="Diseño y programación
+Guillem Pascual Bordes"></div>
+            <div class="info-meta-right" data-full-text="Versión
+v2.2.1"></div>
+        </div>
+    </div>
+
+    <div id="modal" class="modal hidden">
+        <div class="modal-content">
+            <img id="modal-img" src="" alt="">
+            <button id="modal-close" aria-label="Close">x</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
