@@ -1934,6 +1934,11 @@ function setupDisplayCardEffects(wrapper, reflection) {
 
     const getDrawPoint = (e) => {
         if (!drawCanvas) return { x: 0, y: 0 };
+        if (e && e.target === drawCanvas && typeof e.offsetX === 'number' && typeof e.offsetY === 'number') {
+            const x = clamp(e.offsetX, 0, drawCanvas.clientWidth || 0);
+            const y = clamp(e.offsetY, 0, drawCanvas.clientHeight || 0);
+            return { x, y };
+        }
         const rect = drawCanvas.getBoundingClientRect();
         const x = clamp(e.clientX - rect.left, 0, rect.width);
         const y = clamp(e.clientY - rect.top, 0, rect.height);
@@ -2055,13 +2060,13 @@ function setupDisplayCardEffects(wrapper, reflection) {
 
     wrapper.addEventListener('mousemove', handleMove);
     wrapper.addEventListener('mouseleave', handleLeave);
-    wrapper.addEventListener('mousedown', handleToggleBrush);
+    drawCanvas.addEventListener('mousedown', handleToggleBrush);
     wrapper.addEventListener('animationend', handleAnimEnd, { once: true });
 
     displayState.cleanup = () => {
         wrapper.removeEventListener('mousemove', handleMove);
         wrapper.removeEventListener('mouseleave', handleLeave);
-        wrapper.removeEventListener('mousedown', handleToggleBrush);
+        if (drawCanvas) drawCanvas.removeEventListener('mousedown', handleToggleBrush);
         if (resizeObserver) resizeObserver.disconnect();
     };
 }
@@ -2342,11 +2347,19 @@ function showPackOverlay(filenames) {
         }, 300);
     };
 
+    const getOverlayCardName = (cardNode) => {
+        if (!cardNode) return '';
+        if (cardNode.dataset && cardNode.dataset.cardName) return cardNode.dataset.cardName;
+        const namedImg = cardNode.querySelector('img[data-filename]');
+        if (namedImg) return namedImg.dataset.filename || '';
+        const fallbackImg = cardNode.querySelector('img');
+        return fallbackImg ? (fallbackImg.dataset.filename || fallbackImg.alt || '') : '';
+    };
+
     const showBadgeForTopCard = () => {
         const topCard = stack.lastElementChild;
         if (!topCard) return;
-        const img = topCard.querySelector('img');
-        const cardName = img ? img.dataset.cardName || img.alt : topCard.dataset.cardName;
+        const cardName = getOverlayCardName(topCard);
         if (isFirstCopy(cardName) && !topCard.querySelector('.new-badge')) {
             const badge = document.createElement('div');
             badge.className = 'new-badge';
@@ -2373,8 +2386,7 @@ function showPackOverlay(filenames) {
         }
         advanceLocked = true;
 
-        const img = topCard.querySelector('img');
-        const cardName = img ? img.dataset.cardName || img.alt : topCard.dataset.cardName;
+        const cardName = getOverlayCardName(topCard);
 
         playSound(cardRevealSound);
         topCard.classList.add('stack-card-revealing');

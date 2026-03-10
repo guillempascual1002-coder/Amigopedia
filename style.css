@@ -636,7 +636,7 @@ body.album-open .drawer-inspect.has-card .drawer-body .drawer-content {
 .inspect-close {
     position: fixed;
     left: 1851px;
-    top: 658px;
+    top: 682px;
     pointer-events: auto;
 }
 
@@ -702,8 +702,9 @@ body.album-open .drawer-inspect.has-card .drawer-body .drawer-content {
     inset: 0;
     width: 100%;
     height: 100%;
-    z-index: 24;
-    pointer-events: none;
+    z-index: 999;
+    transform: translateZ(80px);
+    pointer-events: auto;
 }
 
 .dragging {
@@ -1089,6 +1090,7 @@ body.album-open .drawer-inspect.has-card .drawer-body .drawer-content {
     left: 50%;
     width: 100%;
     height: auto;
+    overflow: visible;
     transform-origin: center;
     transition: transform 0.4s ease, opacity 0.4s ease;
 }
@@ -1116,6 +1118,8 @@ body.album-open .drawer-inspect.has-card .drawer-body .drawer-content {
     font-size: 12px;
     padding: 4px 8px;
     border-radius: 20px;
+    z-index: 1000;
+    pointer-events: none;
 }
 
 .new-sparkles-mask {
